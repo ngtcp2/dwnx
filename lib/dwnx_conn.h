@@ -59,4 +59,7 @@ struct dwnx_conn {
 int dwnx_conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
                                     size_t datalen);
 
+int dwnx_conn_recv_stream(dwnx_conn *conn, const dwnx_frame_stream *fr,
+                          dwnx_tstamp ts);
+
 #endif /* !defined(DWNX_CONN_H) */

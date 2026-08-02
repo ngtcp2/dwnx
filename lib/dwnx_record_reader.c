@@ -37,10 +37,11 @@ void dwnx_varint_reader_reset(dwnx_varint_reader *vird) {
 }
 
 dwnx_ssize dwnx_varint_reader_read(dwnx_varint_reader *vird,
-                                   const uint8_t *begin, const uint8_t *end,
+                                   const uint8_t *data, size_t datalen,
                                    int fin) {
   size_t len, vlen;
   uint8_t *p;
+  const uint8_t *begin = data, *end = data + datalen;
 
   assert(begin != end);
 
@@ -96,10 +97,15 @@ void dwnx_record_reader_next_frame(dwnx_record_reader *rcrd,
   rcrd->state = DWNX_RECORD_READ_STATE_FRAME_TYPE;
 }
 
-size_t dwnx_record_reader_buf_avail(dwnx_record_reader *rcrd, size_t len) {
-  return dwnx_min(dwnx_buf_left(&rcrd->buf), dwnx_min(len, rcrd->record_left));
+size_t dwnx_record_reader_avail(dwnx_record_reader *rcrd, size_t len) {
+  return dwnx_min(len, rcrd->record_left);
 }
 
-int dwnx_record_reader_fin(dwnx_record_reader *rcrd, size_t len) {
-  return rcrd->record_left <= len;
+size_t dwnx_record_reader_field_avail(dwnx_record_reader *rcrd, size_t len) {
+  return dwnx_min(rcrd->field_left, dwnx_record_reader_avail(rcrd, len));
+}
+
+size_t dwnx_record_reader_buf_avail(dwnx_record_reader *rcrd, size_t len) {
+  return dwnx_min(dwnx_buf_left(&rcrd->buf),
+                  dwnx_record_reader_avail(rcrd, len));
 }

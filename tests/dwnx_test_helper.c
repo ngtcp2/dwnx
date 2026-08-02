@@ -39,11 +39,28 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
     dest->last += 2;
 
     nwrite = dwnx_transport_params_encode(dest->last, dwnx_buf_left(dest),
-                                          &fr->qx_transport_parameters.params);
-    assert_ptrdiff(0, <, nwrite);
+                                          fr->qx_transport_parameters.params);
+    assert_ptrdiff(0, <=, nwrite);
 
     dest->last += nwrite;
     dwnx_put_uvarintw(p, (size_t)nwrite, 2);
+
+    return;
+  case DWNX_FRAME_STREAM:
+    dest->last =
+      dwnx_put_uvarint(dest->last, fr->stream.type | fr->stream.flags);
+    dest->last = dwnx_put_uvarint(dest->last, (uint64_t)fr->stream.stream_id);
+
+    if (fr->stream.flags & DWNX_STREAM_OFF_BIT) {
+      dest->last = dwnx_put_uvarint(dest->last, fr->stream.offset);
+    }
+
+    if (fr->stream.flags & DWNX_STREAM_LEN_BIT) {
+      dest->last = dwnx_put_uvarint(dest->last, fr->stream.len);
+    }
+
+    memset(dest->last, 0, fr->stream.len);
+    dest->last += fr->stream.len;
 
     return;
   default:

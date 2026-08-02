@@ -36,5 +36,6 @@
 extern const MunitSuite conn_suite;
 
 munit_void_test_decl(test_dwnx_conn_recv_transport_params)
+munit_void_test_decl(test_dwnx_conn_recv_stream)
 
 #endif /* !defined(DWNX_CONN_TEST_H) */

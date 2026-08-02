@@ -44,7 +44,7 @@ typedef struct dwnx_varint_reader {
 void dwnx_varint_reader_reset(dwnx_varint_reader *vird);
 
 dwnx_ssize dwnx_varint_reader_read(dwnx_varint_reader *vird,
-                                   const uint8_t *begin, const uint8_t *end,
+                                   const uint8_t *data, size_t datalen,
                                    int fin);
 
 static inline int dwnx_varint_reader_done(dwnx_varint_reader *vird) {
@@ -56,12 +56,17 @@ typedef enum dwnx_record_read_state {
   DWNX_RECORD_READ_STATE_FRAME_TYPE,
   DWNX_RECORD_READ_STATE_QX_TRANSPORT_PARAMETERS_LEN,
   DWNX_RECORD_READ_STATE_QX_TRANSPORT_PARAMETERS_PARAMS,
+  DWNX_RECORD_READ_STATE_STREAM_STREAM_ID,
+  DWNX_RECORD_READ_STATE_STREAM_OFFSET,
+  DWNX_RECORD_READ_STATE_STREAM_LENGTH,
+  DWNX_RECORD_READ_STATE_STREAM_DATA,
 } dwnx_record_read_state;
 
 typedef struct dwnx_record_reader {
   dwnx_record_read_state state;
   dwnx_frame fr;
   size_t record_left;
+  size_t field_left;
   dwnx_buf buf;
 } dwnx_record_reader;
 
@@ -70,8 +75,10 @@ void dwnx_record_reader_reset(dwnx_record_reader *rcrd, const dwnx_mem *mem);
 void dwnx_record_reader_next_frame(dwnx_record_reader *rcrd,
                                    const dwnx_mem *mem);
 
-size_t dwnx_record_reader_buf_avail(dwnx_record_reader *rcrd, size_t len);
+size_t dwnx_record_reader_avail(dwnx_record_reader *rcrd, size_t len);
 
-int dwnx_record_reader_fin(dwnx_record_reader *rcrd, size_t len);
+size_t dwnx_record_reader_field_avail(dwnx_record_reader *rcrd, size_t len);
+
+size_t dwnx_record_reader_buf_avail(dwnx_record_reader *rcrd, size_t len);
 
 #endif /* !defined(DWNX_RECORD_READ_STATE_H) */
