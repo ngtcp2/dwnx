@@ -72,6 +72,295 @@ extern "C" {
 #endif /* defined(__cplusplus) */
 
 /**
+ * @macrosection
+ *
+ * QUIC specific macros
+ */
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_MAX_VARINT` is the maximum value which can be encoded
+ * in variable-length integer encoding.
+ */
+#define DWNX_MAX_VARINT ((1ULL << 62) - 1)
+
+#define DWNX_DEFAULT_MAX_RECORD_SIZE 16382
+
+/**
+ * @macrosection
+ *
+ * dwnx library error codes
+ */
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_INVALID_ARGUMENT` indicates that a passed argument
+ * is invalid.
+ */
+#define DWNX_ERR_INVALID_ARGUMENT -201
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_NOBUF` indicates that a provided buffer does not
+ * have enough space to store data.
+ */
+#define DWNX_ERR_NOBUF -202
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_PROTO` indicates a general protocol error.
+ */
+#define DWNX_ERR_PROTO -203
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_INVALID_STATE` indicates that a requested
+ * operation is not allowed at the current connection state.
+ */
+#define DWNX_ERR_INVALID_STATE -204
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_STREAM_ID_BLOCKED` indicates that there is no
+ * spare stream ID available.
+ */
+#define DWNX_ERR_STREAM_ID_BLOCKED -206
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_STREAM_IN_USE` indicates that a stream ID is
+ * already in use.
+ */
+#define DWNX_ERR_STREAM_IN_USE -207
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_STREAM_DATA_BLOCKED` indicates that stream data
+ * cannot be sent because of flow control.
+ */
+#define DWNX_ERR_STREAM_DATA_BLOCKED -208
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_FLOW_CONTROL` indicates flow control error.
+ */
+#define DWNX_ERR_FLOW_CONTROL -209
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_STREAM_LIMIT` indicates that a remote endpoint
+ * opens more streams that is permitted.
+ */
+#define DWNX_ERR_STREAM_LIMIT -211
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_FINAL_SIZE` indicates that inconsistent final size
+ * of a stream.
+ */
+#define DWNX_ERR_FINAL_SIZE -212
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_REQUIRED_TRANSPORT_PARAM` indicates that a
+ * required transport parameter is missing.
+ */
+#define DWNX_ERR_REQUIRED_TRANSPORT_PARAM -215
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_MALFORMED_TRANSPORT_PARAM` indicates that a
+ * transport parameter is malformed.
+ */
+#define DWNX_ERR_MALFORMED_TRANSPORT_PARAM -216
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_FRAME_ENCODING` indicates there is an error in
+ * frame encoding.
+ */
+#define DWNX_ERR_FRAME_ENCODING -217
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_STREAM_SHUT_WR` indicates no more data can be sent
+ * to a stream.
+ */
+#define DWNX_ERR_STREAM_SHUT_WR -219
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_STREAM_NOT_FOUND` indicates that a stream was not
+ * found.
+ */
+#define DWNX_ERR_STREAM_NOT_FOUND -220
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_STREAM_STATE` indicates that a requested operation
+ * is not allowed at the current stream state.
+ */
+#define DWNX_ERR_STREAM_STATE -221
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_CLOSING` indicates that connection is in closing
+ * state.
+ */
+#define DWNX_ERR_CLOSING -223
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_DRAINING` indicates that connection is in draining
+ * state.
+ */
+#define DWNX_ERR_DRAINING -224
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_TRANSPORT_PARAM` indicates a general transport
+ * parameter error.
+ */
+#define DWNX_ERR_TRANSPORT_PARAM -225
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_INTERNAL` indicates an internal error.
+ */
+#define DWNX_ERR_INTERNAL -228
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_WRITE_MORE` indicates
+ * :macro:`DWNX_WRITE_STREAM_FLAG_MORE` is used and a function call
+ * succeeded.
+ */
+#define DWNX_ERR_WRITE_MORE -230
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_IDLE_CLOSE` indicates the connection should be
+ * closed silently because of idle timeout.
+ */
+#define DWNX_ERR_IDLE_CLOSE -238
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_FATAL` indicates that error codes less than this
+ * value is fatal error.  When this error is returned, an endpoint
+ * should close connection immediately.
+ */
+#define DWNX_ERR_FATAL -500
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_NOMEM` indicates out of memory.
+ */
+#define DWNX_ERR_NOMEM -501
+/**
+ * @macro
+ *
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` indicates that user defined
+ * callback function failed.
+ */
+#define DWNX_ERR_CALLBACK_FAILURE -502
+
+/**
+ * @macrosection
+ *
+ * QUIC transport error code
+ */
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_NO_ERROR` is QUIC transport error code ``NO_ERROR``.
+ */
+#define DWNX_NO_ERROR 0x0U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_INTERNAL_ERROR` is QUIC transport error code
+ * ``INTERNAL_ERROR``.
+ */
+#define DWNX_INTERNAL_ERROR 0x1U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_CONNECTION_REFUSED` is QUIC transport error code
+ * ``CONNECTION_REFUSED``.
+ */
+#define DWNX_CONNECTION_REFUSED 0x2U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_FLOW_CONTROL_ERROR` is QUIC transport error code
+ * ``FLOW_CONTROL_ERROR``.
+ */
+#define DWNX_FLOW_CONTROL_ERROR 0x3U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_STREAM_LIMIT_ERROR` is QUIC transport error code
+ * ``STREAM_LIMIT_ERROR``.
+ */
+#define DWNX_STREAM_LIMIT_ERROR 0x4U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_STREAM_STATE_ERROR` is QUIC transport error code
+ * ``STREAM_STATE_ERROR``.
+ */
+#define DWNX_STREAM_STATE_ERROR 0x5U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_FINAL_SIZE_ERROR` is QUIC transport error code
+ * ``FINAL_SIZE_ERROR``.
+ */
+#define DWNX_FINAL_SIZE_ERROR 0x6U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_FRAME_ENCODING_ERROR` is QUIC transport error code
+ * ``FRAME_ENCODING_ERROR``.
+ */
+#define DWNX_FRAME_ENCODING_ERROR 0x7U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_TRANSPORT_PARAMETER_ERROR` is QUIC transport error
+ * code ``TRANSPORT_PARAMETER_ERROR``.
+ */
+#define DWNX_TRANSPORT_PARAMETER_ERROR 0x8U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_PROTOCOL_VIOLATION` is QUIC transport error code
+ * ``PROTOCOL_VIOLATION``.
+ */
+#define DWNX_PROTOCOL_VIOLATION 0xAU
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_APPLICATION_ERROR` is QUIC transport error code
+ * ``APPLICATION_ERROR``.
+ */
+#define DWNX_APPLICATION_ERROR 0xCU
+
+/**
  * @typedef
  *
  * :type:`dwnx_ssize` is signed counterpart of size_t.
@@ -187,6 +476,50 @@ typedef struct dwnx_mem {
 } dwnx_mem;
 
 /**
+ * @function
+ *
+ * `dwnx_mem_default` returns the default, system standard memory
+ * allocator.
+ */
+DWNX_EXTERN const dwnx_mem *dwnx_mem_default(void);
+
+/**
+ * @struct
+ *
+ * :type:`dwnx_vec` is struct iovec compatible structure to reference
+ * arbitrary array of bytes.
+ */
+typedef struct dwnx_vec {
+  /**
+   * :member:`base` points to the data.
+   */
+  uint8_t *base;
+  /**
+   * :member:`len` is the number of bytes which the buffer pointed by
+   * base contains.
+   */
+  size_t len;
+} dwnx_vec;
+
+/**
+ * @typedef
+ *
+ * :type:`dwnx_tstamp` is a timestamp with nanosecond resolution.
+ * ``UINT64_MAX`` is an invalid value, and it is often used to
+ * indicate that no value is set.
+ */
+typedef uint64_t dwnx_tstamp;
+
+/**
+ * @typedef
+ *
+ * :type:`dwnx_duration` is a period of time in nanosecond resolution.
+ * ``UINT64_MAX`` is an invalid value, and it is often used to
+ * indicate that no value is set.
+ */
+typedef uint64_t dwnx_duration;
+
+/**
  * @macrosection
  *
  * Time related macros
@@ -232,15 +565,72 @@ typedef struct dwnx_mem {
  */
 #define DWNX_MINUTES ((dwnx_duration)(60ULL * DWNX_SECONDS))
 
-#ifdef _MSC_VER
-#  pragma warning(pop)
-#endif /* defined(_MSC_VER) */
+typedef struct dwnx_transport_params {
+  /**
+   * :member:`initial_max_stream_data_bidi_local` is the size of flow
+   * control window of locally initiated stream.  This is the number
+   * of bytes that the remote endpoint can send, and the local
+   * endpoint must ensure that it has enough buffer to receive them.
+   */
+  uint64_t initial_max_stream_data_bidi_local;
+  /**
+   * :member:`initial_max_stream_data_bidi_remote` is the size of flow
+   * control window of remotely initiated stream.  This is the number
+   * of bytes that the remote endpoint can send, and the local
+   * endpoint must ensure that it has enough buffer to receive them.
+   */
+  uint64_t initial_max_stream_data_bidi_remote;
+  /**
+   * :member:`initial_max_stream_data_uni` is the size of flow control
+   * window of remotely initiated unidirectional stream.  This is the
+   * number of bytes that the remote endpoint can send, and the local
+   * endpoint must ensure that it has enough buffer to receive them.
+   */
+  uint64_t initial_max_stream_data_uni;
+  /**
+   * :member:`initial_max_data` is the connection level flow control
+   * window.
+   */
+  uint64_t initial_max_data;
+  /**
+   * :member:`initial_max_streams_bidi` is the number of concurrent
+   * streams that the remote endpoint can create.
+   */
+  uint64_t initial_max_streams_bidi;
+  /**
+   * :member:`initial_max_streams_uni` is the number of concurrent
+   * unidirectional streams that the remote endpoint can create.
+   */
+  uint64_t initial_max_streams_uni;
+  /**
+   * :member:`max_idle_timeout` is a duration during which sender
+   * allows quiescent.  0 means no idle timeout.  It must not be
+   * UINT64_MAX.
+   */
+  dwnx_duration max_idle_timeout;
+  uint64_t max_record_size;
+} dwnx_transport_params;
+
+DWNX_EXTERN void dwnx_transport_params_default(dwnx_transport_params *params);
 
 typedef struct dwnx_conn dwnx_conn;
 
-DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn);
+DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
+                                     const dwnx_transport_params *params,
+                                     const dwnx_mem *mem, void *user_data);
 
-DWNX_EXTERN int dwnx_conn_client_new(dwnx_conn **pconn);
+DWNX_EXTERN int dwnx_conn_client_new(dwnx_conn **pconn,
+                                     const dwnx_transport_params *params,
+                                     const dwnx_mem *mem, void *user_data);
+
+DWNX_EXTERN void dwnx_conn_del(dwnx_conn *conn);
+
+DWNX_EXTERN int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data,
+                               size_t datalen, dwnx_tstamp ts);
+
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif /* defined(_MSC_VER) */
 
 #ifdef __cplusplus
 }

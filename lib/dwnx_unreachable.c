@@ -22,27 +22,53 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#ifdef HAVE_CONFIG_H
-#  include <config.h>
-#endif /* defined(HAVE_CONFIG_H) */
+#include "dwnx_unreachable.h"
 
-#include "munit.h"
+#include <stdio.h>
+#include <errno.h>
+#include <stdlib.h>
+#ifdef HAVE_UNISTD_H
+#  define DWNX_UNREACHABLE_LOG
+#  include <unistd.h>
+#elif defined(WIN32)
+#  define DWNX_UNREACHABLE_LOG
+#  include <io.h>
+#endif /* defined(WIN32) */
 
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
+void dwnx_unreachable_fail(const char *file, int line, const char *func) {
+#ifdef DWNX_UNREACHABLE_LOG
+  char *buf;
+  size_t buflen;
+  int rv;
 
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    {0},
-  };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
+#  define DWNX_UNREACHABLE_TEMPLATE "%s:%d %s: Unreachable.\n"
 
-  return munit_suite_main(&suite, NULL, argc, argv);
+  rv = snprintf(NULL, 0, DWNX_UNREACHABLE_TEMPLATE, file, line, func);
+  if (rv < 0) {
+    abort();
+  }
+
+  /* here we explicitly use system malloc */
+  buflen = (size_t)rv + 1;
+  buf = malloc(buflen);
+  if (buf == NULL) {
+    abort();
+  }
+
+  rv = snprintf(buf, buflen, DWNX_UNREACHABLE_TEMPLATE, file, line, func);
+  if (rv < 0) {
+    abort();
+  }
+
+#  ifndef WIN32
+  while (write(STDERR_FILENO, buf, (size_t)rv) == -1 && errno == EINTR)
+    ;
+#  else  /* defined(WIN32) */
+  _write(_fileno(stderr), buf, (unsigned int)rv);
+#  endif /* defined(WIN32) */
+
+  free(buf);
+#endif /* defined(DWNX_UNREACHABLE_LOG) */
+
+  abort();
 }

@@ -22,27 +22,15 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef DWNX_STR_H
+#define DWNX_STR_H
+
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif /* defined(HAVE_CONFIG_H) */
 
-#include "munit.h"
+#include <dwnx/dwnx.h>
 
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
+void *dwnx_cpymem(void *dest, const void *src, size_t n);
 
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    {0},
-  };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
-
-  return munit_suite_main(&suite, NULL, argc, argv);
-}
+#endif /* !defined(DWNX_STR_H) */

@@ -22,27 +22,29 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef DWNX_FRAME_H
+#define DWNX_FRAME_H
+
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif /* defined(HAVE_CONFIG_H) */
 
-#include "munit.h"
+#include <dwnx/dwnx.h>
 
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
+#define DWNX_FRAME_QX_TRANSPORT_PARAMETERS 0x3F5153300D0A0D0AULL
 
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    {0},
-  };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
+typedef struct dwnx_frame_hd {
+  uint64_t type;
+} dwnx_frame_hd;
 
-  return munit_suite_main(&suite, NULL, argc, argv);
-}
+typedef struct dwnx_frame_qx_transport_parameters {
+  uint64_t type;
+  dwnx_transport_params params;
+} dwnx_frame_qx_transport_parameters;
+
+typedef union dwnx_frame {
+  dwnx_frame_hd hd;
+  dwnx_frame_qx_transport_parameters qx_transport_parameters;
+} dwnx_frame;
+
+#endif /* !defined(DWNX_FRAME_H) */

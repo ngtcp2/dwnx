@@ -22,27 +22,31 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef DWNX_UNREACHABLE_H
+#define DWNX_UNREACHABLE_H
+
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif /* defined(HAVE_CONFIG_H) */
 
-#include "munit.h"
+#include <dwnx/dwnx.h>
 
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
+#ifdef __FILE_NAME__
+#  define DWNX_FILE_NAME __FILE_NAME__
+#else /* !defined(__FILE_NAME__) */
+#  define DWNX_FILE_NAME "(file)"
+#endif /* !defined(__FILE_NAME__) */
 
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    {0},
-  };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
+#define dwnx_unreachable()                                                     \
+  dwnx_unreachable_fail(DWNX_FILE_NAME, __LINE__, __func__)
 
-  return munit_suite_main(&suite, NULL, argc, argv);
-}
+#ifdef _MSC_VER
+__declspec(noreturn)
+#endif /* defined(_MSC_VER) */
+    void dwnx_unreachable_fail(const char *file, int line, const char *func)
+#ifndef _MSC_VER
+        __attribute__((noreturn))
+#endif /* !defined(_MSC_VER) */
+        ;
+
+#endif /* !defined(DWNX_UNREACHABLE_H) */

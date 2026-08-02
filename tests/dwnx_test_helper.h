@@ -22,27 +22,22 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef DWNX_TEST_HELPER_H
+#define DWNX_TEST_HELPER_H
+
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif /* defined(HAVE_CONFIG_H) */
 
+#define MUNIT_ENABLE_ASSERT_ALIASES
+
 #include "munit.h"
 
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
+#include "dwnx_buf.h"
+#include "dwnx_frame.h"
 
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    {0},
-  };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
+void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr);
 
-  return munit_suite_main(&suite, NULL, argc, argv);
-}
+void dwnx_write_record(dwnx_buf *dest, const dwnx_frame *fr, size_t n);
+
+#endif /* !defined(DWNX_TEST_HELPER_H) */

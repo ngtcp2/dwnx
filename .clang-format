@@ -267,12 +267,12 @@ StatementMacros:
   - Q_UNUSED
   - QT_REQUIRE_VERSION
   - munit_void_test_decl
-  - ngtcp2_ksl_search_def
-  - ngtcp2_max_def
-  - ngtcp2_min_def
-  - ngtcp2_objalloc_decl
-  - ngtcp2_objalloc_def
-  - ngtcp2_static_ringbuf_def
+  - dwnx_ksl_search_def
+  - dwnx_max_def
+  - dwnx_min_def
+  - dwnx_objalloc_decl
+  - dwnx_objalloc_def
+  - dwnx_static_ringbuf_def
 TableGenBreakInsideDAGArg: DontBreak
 TabWidth:        8
 UseTab:          Never

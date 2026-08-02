@@ -22,27 +22,43 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#ifdef HAVE_CONFIG_H
-#  include <config.h>
-#endif /* defined(HAVE_CONFIG_H) */
+#include "dwnx_test_helper.h"
 
-#include "munit.h"
+#include "dwnx_transport_params.h"
+#include "dwnx_conv.h"
+#include "dwnx_unreachable.h"
 
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
+void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
+  uint8_t *p;
+  dwnx_ssize nwrite;
 
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    {0},
-  };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
+  switch (fr->hd.type) {
+  case DWNX_FRAME_QX_TRANSPORT_PARAMETERS:
+    dest->last = dwnx_put_uvarint(dest->last, fr->qx_transport_parameters.type);
+    p = dest->last;
+    dest->last += 2;
 
-  return munit_suite_main(&suite, NULL, argc, argv);
+    nwrite = dwnx_transport_params_encode(dest->last, dwnx_buf_left(dest),
+                                          &fr->qx_transport_parameters.params);
+    assert_ptrdiff(0, <, nwrite);
+
+    dest->last += nwrite;
+    dwnx_put_uvarintw(p, (size_t)nwrite, 2);
+
+    return;
+  default:
+    dwnx_unreachable();
+  }
+}
+
+void dwnx_write_record(dwnx_buf *dest, const dwnx_frame *fr, size_t n) {
+  uint8_t *p = dest->last;
+
+  dest->last += 2;
+
+  for (; n; ++fr, --n) {
+    dwnx_write_frame(dest, fr);
+  }
+
+  dwnx_put_uvarintw(p, (uint64_t)(dest->last - p - 2), 2);
 }

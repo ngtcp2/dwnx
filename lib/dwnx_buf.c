@@ -22,27 +22,26 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#ifdef HAVE_CONFIG_H
-#  include <config.h>
-#endif /* defined(HAVE_CONFIG_H) */
+#include "dwnx_buf.h"
+#include "dwnx_mem.h"
 
-#include "munit.h"
-
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
-
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    {0},
+void dwnx_buf_init(dwnx_buf *buf, uint8_t *begin, size_t len) {
+  *buf = (dwnx_buf){
+    .begin = begin,
+    .end = begin + len,
+    .pos = begin,
+    .last = begin,
   };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
+}
 
-  return munit_suite_main(&suite, NULL, argc, argv);
+void dwnx_buf_reset(dwnx_buf *buf) { buf->pos = buf->last = buf->begin; }
+
+size_t dwnx_buf_cap(const dwnx_buf *buf) {
+  return (size_t)(buf->end - buf->begin);
+}
+
+void dwnx_buf_trunc(dwnx_buf *buf, size_t len) {
+  if (dwnx_buf_len(buf) > len) {
+    buf->last = buf->pos + len;
+  }
 }

@@ -26,10 +26,16 @@ check_PROGRAMS = main
 
 OBJECTS = \
 	main.c \
-	munit/munit.c
+	munit/munit.c \
+	dwnx_test_helper.c \
+	dwnx_transport_params_test.c \
+	dwnx_conn_test.c
 
 HFILES = \
-	munit/munit.h
+	munit/munit.h \
+	dwnx_test_helper.h \
+	dwnx_transport_params_test.h \
+	dwnx_conn_test.h
 
 main_SOURCES = $(HFILES) $(OBJECTS)
 

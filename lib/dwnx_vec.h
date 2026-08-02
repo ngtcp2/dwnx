@@ -22,27 +22,31 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef DWNX_VEC_H
+#define DWNX_VEC_H
+
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif /* defined(HAVE_CONFIG_H) */
 
-#include "munit.h"
+#include <dwnx/dwnx.h>
 
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
+/*
+ * dwnx_vec_init initializes |vec| with the given parameters.  It
+ * returns |vec|.
+ */
+dwnx_vec *dwnx_vec_init(dwnx_vec *vec, const uint8_t *base, size_t len);
 
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    {0},
+/*
+ * dwnx_vec_len returns the sum of length in |vec| of |n| elements.
+ */
+uint64_t dwnx_vec_len(const dwnx_vec *vec, size_t n);
+
+static inline dwnx_vec dwnx_vec_sub(const dwnx_vec *vec, size_t len) {
+  return (dwnx_vec){
+    .base = vec->base + len,
+    .len = vec->len - len,
   };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
-
-  return munit_suite_main(&suite, NULL, argc, argv);
 }
+
+#endif /* !defined(DWNX_VEC_H) */

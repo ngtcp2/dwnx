@@ -33,10 +33,29 @@ DISTCLEANFILES = $(pkgconfig_DATA)
 lib_LTLIBRARIES = libdwnx.la
 
 OBJECTS = \
-	dwnx_conn.c
+	dwnx_conn.c \
+	dwnx_transport_params.c \
+	dwnx_mem.c \
+	dwnx_record_reader.c \
+	dwnx_vec.c \
+	dwnx_frame.c \
+	dwnx_conv.c \
+	dwnx_str.c \
+	dwnx_unreachable.c \
+	dwnx_buf.c
 
 HFILES = \
-	dwnx_conn.h
+	dwnx_conn.h \
+	dwnx_transport_params.h \
+	dwnx_mem.h \
+	dwnx_record_reader.h \
+	dwnx_vec.h \
+	dwnx_frame.h \
+	dwnx_conv.h \
+	dwnx_str.h \
+	dwnx_unreachable.h \
+	dwnx_buf.h \
+	dwnx_net.h
 
 libdwnx_la_SOURCES = $(HFILES) $(OBJECTS)
 libdwnx_la_LDFLAGS = -no-undefined \

@@ -31,8 +31,32 @@
 
 #include <dwnx/dwnx.h>
 
+#include "dwnx_record_reader.h"
+
+#define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SEEN 0x01U
+
 struct dwnx_conn {
+  const dwnx_mem *mem;
+  void *user_data;
+
+  struct {
+    dwnx_transport_params transport_params;
+  } local;
+
+  struct {
+    dwnx_transport_params transport_params;
+  } remote;
+
+  struct {
+    dwnx_varint_reader vird;
+    dwnx_record_reader rcrd;
+  } rx;
+
+  uint32_t flags;
   int server;
 };
+
+int dwnx_conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
+                                    size_t datalen);
 
 #endif /* !defined(DWNX_CONN_H) */
