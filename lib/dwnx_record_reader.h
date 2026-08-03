@@ -63,22 +63,45 @@ typedef enum dwnx_record_read_state {
 } dwnx_record_read_state;
 
 typedef struct dwnx_record_reader {
+  /* state is the state of this reader. */
   dwnx_record_read_state state;
+  /* fr is the frame currently received. */
   dwnx_frame fr;
+  /* record_left is the number of bytes left in the current record. */
   size_t record_left;
+  /* field_left is the number of bytes left in the field currently
+     reading.  This field is not used for every field.*/
   size_t field_left;
+  /* buf points to the buffer when we need to buffer data. */
   dwnx_buf buf;
 } dwnx_record_reader;
 
+/* dwnx_record_reader_reset resets per-record state.  |rcrd|->buf is
+   freed and the other fields are also reset. */
 void dwnx_record_reader_reset(dwnx_record_reader *rcrd, const dwnx_mem *mem);
 
+/* dwnx_record_reader_next_frame resets per-frame state.  After this
+   call, |rcrd| is ready to read the next frame.  |rcrd|->buf is freed
+   and |rcrd|->state is reset to DWNX_RECORD_READ_STATE_FRAME_TYPE. */
 void dwnx_record_reader_next_frame(dwnx_record_reader *rcrd,
                                    const dwnx_mem *mem);
 
+/* dwnx_record_reader_avail returns the number of bytes to read from
+   the given data of length |len|, taking into account the remainder
+   of the record. */
 size_t dwnx_record_reader_avail(dwnx_record_reader *rcrd, size_t len);
 
+/* dwnx_record_reader_field_avail returns the number of bytes to read
+   from the given data of length |len|, taking into account the
+   remainder of the field (see |rcrd|->field_left).  This function
+   assumes that |rcrd|->field_left has been initialized and set to the
+   valid value. */
 size_t dwnx_record_reader_field_avail(dwnx_record_reader *rcrd, size_t len);
 
+/* dwnx_record_reader_buf_avail returns the number of bytes to read
+   from the given data of length |len|, taking into account the
+   remainder of the buf (see |rcrd->buf).  This function assumes that
+   |rcrd|->buf has been initialized. */
 size_t dwnx_record_reader_buf_avail(dwnx_record_reader *rcrd, size_t len);
 
 #endif /* !defined(DWNX_RECORD_READ_STATE_H) */
