@@ -615,11 +615,87 @@ DWNX_EXTERN void dwnx_transport_params_default(dwnx_transport_params *params);
 
 typedef struct dwnx_conn dwnx_conn;
 
+/**
+ * @macrosection
+ *
+ * STREAM frame data flags
+ */
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_STREAM_DATA_FLAG_NONE` indicates no flag set.
+ */
+#define DWNX_STREAM_DATA_FLAG_NONE 0x00U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_STREAM_DATA_FLAG_FIN` indicates that this chunk of
+ * data is final piece of an incoming stream.
+ */
+#define DWNX_STREAM_DATA_FLAG_FIN 0x01U
+
+/**
+ * @functypedef
+ *
+ * :type:`dwnx_recv_stream_data` is invoked when stream data is
+ * received.  The stream is specified by |stream_id|.  |flags| is the
+ * bitwise-OR of zero or more of :macro:`DWNX_STREAM_DATA_FLAG_*
+ * <DWNX_STREAM_DATA_FLAG_NONE>`.  If |flags| &
+ * :macro:`DWNX_STREAM_DATA_FLAG_FIN` is nonzero, this portion of the
+ * data is the last data in this stream.  |offset| is the offset where
+ * this data begins.  The library ensures that data is passed to the
+ * application in the non-decreasing order of |offset| without any
+ * overlap.  The data is passed as |data| of length |datalen|.
+ * |datalen| may be 0 if and only if |fin| is nonzero.
+ *
+ * The callback function must return 0 if it succeeds, or
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` which makes the library return
+ * immediately.
+ */
+typedef int (*dwnx_recv_stream_data)(dwnx_conn *conn, uint32_t flags,
+                                     int64_t stream_id, uint64_t offset,
+                                     const uint8_t *data, size_t datalen,
+                                     void *user_data, void *stream_user_data);
+
+/**
+ * @functypedef
+ *
+ * :type:`dwnx_stream_open` is a callback function which is called
+ * when remote stream is opened by a remote endpoint.  This function
+ * is not called if stream is opened by implicitly (we might
+ * reconsider this behaviour later).
+ *
+ * The implementation of this callback should return 0 if it succeeds.
+ * Returning :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library call
+ * return immediately.
+ */
+typedef int (*dwnx_stream_open)(dwnx_conn *conn, int64_t stream_id,
+                                void *user_data);
+
+typedef struct dwnx_callbacks {
+  /**
+   * :member:`recv_stream_data` is a callback function which is
+   * invoked when stream data, which includes application data, is
+   * received.  This callback function is optional.
+   */
+  dwnx_recv_stream_data recv_stream_data;
+  /**
+   * :member:`stream_open` is a callback function which is invoked
+   * when new remote stream is opened by a remote endpoint.  This
+   * callback function is optional.
+   */
+  dwnx_stream_open stream_open;
+} dwnx_callbacks;
+
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
+                                     const dwnx_callbacks *callbacks,
                                      const dwnx_transport_params *params,
                                      const dwnx_mem *mem, void *user_data);
 
 DWNX_EXTERN int dwnx_conn_client_new(dwnx_conn **pconn,
+                                     const dwnx_callbacks *callbacks,
                                      const dwnx_transport_params *params,
                                      const dwnx_mem *mem, void *user_data);
 
@@ -627,6 +703,15 @@ DWNX_EXTERN void dwnx_conn_del(dwnx_conn *conn);
 
 DWNX_EXTERN int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data,
                                size_t datalen, dwnx_tstamp ts);
+
+/**
+ * @function
+ *
+ * `dwnx_err_is_fatal` returns nonzero if |liberr| is a fatal error.
+ * |liberr| must be one of dwnx library error codes (which is defined
+ * as :macro:`DWNX_ERR_* <DWNX_ERR_INVALID_ARGUMENT>` macros).
+ */
+DWNX_EXTERN int dwnx_err_is_fatal(int liberr);
 
 #ifdef _MSC_VER
 #  pragma warning(pop)

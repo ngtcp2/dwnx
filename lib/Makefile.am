@@ -33,29 +33,51 @@ DISTCLEANFILES = $(pkgconfig_DATA)
 lib_LTLIBRARIES = libdwnx.la
 
 OBJECTS = \
+	dwnx_balloc.c \
+	dwnx_buf.c \
 	dwnx_conn.c \
-	dwnx_transport_params.c \
-	dwnx_mem.c \
-	dwnx_record_reader.c \
-	dwnx_vec.c \
-	dwnx_frame.c \
 	dwnx_conv.c \
+	dwnx_err.c \
+	dwnx_frame.c \
+	dwnx_gaptr.c \
+	dwnx_idtr.c \
+	dwnx_ksl.c \
+	dwnx_map.c \
+	dwnx_mem.c \
+	dwnx_objalloc.c \
+	dwnx_opl.c \
+	dwnx_pq.c \
+	dwnx_range.c \
+	dwnx_record_reader.c \
 	dwnx_str.c \
+	dwnx_strm.c \
+	dwnx_transport_params.c \
 	dwnx_unreachable.c \
-	dwnx_buf.c
+	dwnx_vec.c
 
 HFILES = \
-	dwnx_conn.h \
-	dwnx_transport_params.h \
-	dwnx_mem.h \
-	dwnx_record_reader.h \
-	dwnx_vec.h \
-	dwnx_frame.h \
-	dwnx_conv.h \
-	dwnx_str.h \
-	dwnx_unreachable.h \
+	dwnx_balloc.h \
 	dwnx_buf.h \
-	dwnx_net.h
+	dwnx_conn.h \
+	dwnx_conv.h \
+	dwnx_err.h \
+	dwnx_frame.h \
+	dwnx_gaptr.h \
+	dwnx_idtr.h \
+	dwnx_ksl.h \
+	dwnx_map.h \
+	dwnx_mem.h \
+	dwnx_net.h\
+	dwnx_objalloc.h \
+	dwnx_opl.h \
+	dwnx_pq.h \
+	dwnx_range.h \
+	dwnx_record_reader.h \
+	dwnx_str.h \
+	dwnx_strm.h \
+	dwnx_transport_params.h \
+	dwnx_unreachable.h \
+	dwnx_vec.h
 
 libdwnx_la_SOURCES = $(HFILES) $(OBJECTS)
 libdwnx_la_LDFLAGS = -no-undefined \
