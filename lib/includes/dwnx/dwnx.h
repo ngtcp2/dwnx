@@ -740,6 +740,20 @@ typedef int (*dwnx_stream_close)(dwnx_conn *conn, uint32_t flags,
                                  uint64_t tx_app_error_code, void *user_data,
                                  void *stream_user_data);
 
+/**
+ * @functypedef
+ *
+ * :type:`dwnx_stream_reset` is invoked when a stream identified by
+ * |stream_id| is reset by a remote endpoint.
+ *
+ * The implementation of this callback should return 0 if it succeeds.
+ * Returning :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library call
+ * return immediately.
+ */
+typedef int (*dwnx_stream_reset)(dwnx_conn *conn, int64_t stream_id,
+                                 uint64_t final_size, uint64_t app_error_code,
+                                 void *user_data, void *stream_user_data);
+
 typedef struct dwnx_callbacks {
   /**
    * :member:`recv_stream_data` is a callback function which is
@@ -758,6 +772,12 @@ typedef struct dwnx_callbacks {
    * when a stream is closed.  This callback function is optional.
    */
   dwnx_stream_close stream_close;
+  /**
+   * :member:`stream_reset` is a callback function which is invoked
+   * when a stream is reset by a remote endpoint.  This callback
+   * function is optional.
+   */
+  dwnx_stream_reset stream_reset;
 } dwnx_callbacks;
 
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
@@ -774,6 +794,15 @@ DWNX_EXTERN void dwnx_conn_del(dwnx_conn *conn);
 
 DWNX_EXTERN int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data,
                                size_t datalen, dwnx_tstamp ts);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_extend_max_offset` extends max data offset by
+ * |datalen|.  This function only extends connection-level flow
+ * control window.
+ */
+DWNX_EXTERN void dwnx_conn_extend_max_offset(dwnx_conn *conn, uint64_t datalen);
 
 /**
  * @function

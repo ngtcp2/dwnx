@@ -31,6 +31,7 @@
 void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
   uint8_t *p;
   dwnx_ssize nwrite;
+  uint8_t flags;
 
   switch (fr->hd.type) {
   case DWNX_FRAME_QX_TRANSPORT_PARAMETERS:
@@ -47,20 +48,36 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
 
     return;
   case DWNX_FRAME_STREAM:
-    dest->last =
-      dwnx_put_uvarint(dest->last, fr->stream.type | fr->stream.flags);
+    flags = fr->stream.flags;
+    if (fr->stream.offset) {
+      flags |= DWNX_STREAM_OFF_BIT;
+    }
+
+    if (fr->stream.len) {
+      flags |= DWNX_STREAM_LEN_BIT;
+    }
+
+    dest->last = dwnx_put_uvarint(dest->last, fr->stream.type | flags);
     dest->last = dwnx_put_uvarint(dest->last, (uint64_t)fr->stream.stream_id);
 
-    if (fr->stream.flags & DWNX_STREAM_OFF_BIT) {
+    if (flags & DWNX_STREAM_OFF_BIT) {
       dest->last = dwnx_put_uvarint(dest->last, fr->stream.offset);
     }
 
-    if (fr->stream.flags & DWNX_STREAM_LEN_BIT) {
+    if (flags & DWNX_STREAM_LEN_BIT) {
       dest->last = dwnx_put_uvarint(dest->last, fr->stream.len);
     }
 
     memset(dest->last, 0, fr->stream.len);
     dest->last += fr->stream.len;
+
+    return;
+  case DWNX_FRAME_RESET_STREAM:
+    dest->last = dwnx_put_uvarint(dest->last, fr->reset_stream.type);
+    dest->last =
+      dwnx_put_uvarint(dest->last, (uint64_t)fr->reset_stream.stream_id);
+    dest->last = dwnx_put_uvarint(dest->last, fr->reset_stream.app_error_code);
+    dest->last = dwnx_put_uvarint(dest->last, fr->reset_stream.final_size);
 
     return;
   default:
