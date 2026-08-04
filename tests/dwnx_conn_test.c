@@ -35,6 +35,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_transport_params),
   munit_void_test(test_dwnx_conn_recv_stream),
   munit_void_test(test_dwnx_conn_recv_reset_stream),
+  munit_void_test(test_dwnx_conn_recv_stop_sending),
   munit_test_end(),
 };
 
@@ -61,6 +62,11 @@ typedef struct userdata {
     uint64_t final_size;
     uint64_t app_error_code;
   } stream_reset;
+  struct {
+    size_t ncalled;
+    int64_t stream_id;
+    uint64_t app_error_code;
+  } recv_stop_sending;
 } userdata;
 
 typedef struct conn_options {
@@ -120,6 +126,20 @@ static int stream_reset(dwnx_conn *conn, int64_t stream_id, uint64_t final_size,
   ud->stream_reset.stream_id = stream_id;
   ud->stream_reset.final_size = final_size;
   ud->stream_reset.app_error_code = app_error_code;
+
+  return 0;
+}
+
+static int recv_stop_sending(dwnx_conn *conn, int64_t stream_id,
+                             uint64_t app_error_code, void *user_data,
+                             void *stream_user_data) {
+  userdata *ud = user_data;
+  (void)conn;
+  (void)stream_user_data;
+
+  ++ud->recv_stop_sending.ncalled;
+  ud->recv_stop_sending.stream_id = stream_id;
+  ud->recv_stop_sending.app_error_code = app_error_code;
 
   return 0;
 }
@@ -587,6 +607,118 @@ void test_dwnx_conn_recv_reset_stream(void) {
   rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
 
   assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_stop_sending(void) {
+  static const dwnx_callbacks callbacks = {
+    .stream_open = stream_open,
+    .recv_stop_sending = recv_stop_sending,
+  };
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr[3];
+  dwnx_tstamp ts = 0;
+  int rv;
+  userdata ud;
+  conn_options opts;
+  size_t i;
+
+  fr[0] = empty_params_fr;
+  fr[1].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .stream_id = 4,
+    .len = 99,
+  };
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+
+  fr[2].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id = 4,
+    .app_error_code = 1000000007,
+  };
+
+  dwnx_write_record(&buf, fr, 3);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.stream_open.ncalled);
+  assert_int64(4, ==, ud.stream_open.stream_id);
+  assert_size(1, ==, ud.recv_stop_sending.ncalled);
+  assert_int64(4, ==, ud.recv_stop_sending.stream_id);
+  assert_uint64(1000000007, ==, ud.recv_stop_sending.app_error_code);
+
+  /* Receiving another STOP_SENDING is just fine. */
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr[2], 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(0, ==, ud.recv_stop_sending.ncalled);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 2);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  fr[2].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id = 4,
+    .app_error_code = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr[2], 1);
+
+  ud = (userdata){0};
+
+  for (i = 0; i < dwnx_buf_len(&buf) - 1; ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+    assert_size(0, ==, ud.stream_reset.ncalled);
+  }
+
+  rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.recv_stop_sending.ncalled);
+  assert_int64(4, ==, ud.recv_stop_sending.stream_id);
+  assert_uint64(1000000007, ==, ud.recv_stop_sending.app_error_code);
 
   dwnx_conn_del(conn);
 }

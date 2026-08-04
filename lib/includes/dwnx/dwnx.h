@@ -754,6 +754,23 @@ typedef int (*dwnx_stream_reset)(dwnx_conn *conn, int64_t stream_id,
                                  uint64_t final_size, uint64_t app_error_code,
                                  void *user_data, void *stream_user_data);
 
+/**
+ * @functypedef
+ *
+ * :type:`dwnx_recv_stop_sending` is invoked when a STOP_SENDING frame
+ * is received from a remote endpoint for a stream identified by
+ * |stream_id|.  |app_error_code| is the application error code carried
+ * by the STOP_SENDING frame.  This callback is called at most
+ * once per stream.
+ *
+ * The callback function must return 0 if it succeeds.  Returning
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library call return
+ * immediately.
+ */
+typedef int (*dwnx_recv_stop_sending)(dwnx_conn *conn, int64_t stream_id,
+                                      uint64_t app_error_code, void *user_data,
+                                      void *stream_user_data);
+
 typedef struct dwnx_callbacks {
   /**
    * :member:`recv_stream_data` is a callback function which is
@@ -778,6 +795,12 @@ typedef struct dwnx_callbacks {
    * function is optional.
    */
   dwnx_stream_reset stream_reset;
+  /**
+   * :member:`recv_stop_sending` is a callback function which is invoked
+   * when a STOP_SENDING frame is received from a remote endpoint.  This
+   * callback function is optional.
+   */
+  dwnx_recv_stop_sending recv_stop_sending;
 } dwnx_callbacks;
 
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,

@@ -80,6 +80,13 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
     dest->last = dwnx_put_uvarint(dest->last, fr->reset_stream.final_size);
 
     return;
+  case DWNX_FRAME_STOP_SENDING:
+    dest->last = dwnx_put_uvarint(dest->last, fr->stop_sending.type);
+    dest->last =
+      dwnx_put_uvarint(dest->last, (uint64_t)fr->stop_sending.stream_id);
+    dest->last = dwnx_put_uvarint(dest->last, fr->stop_sending.app_error_code);
+
+    return;
   default:
     dwnx_unreachable();
   }

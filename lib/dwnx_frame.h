@@ -78,11 +78,18 @@ typedef struct dwnx_frame_reset_stream {
   uint64_t final_size;
 } dwnx_frame_reset_stream;
 
+typedef struct dwnx_frame_stop_sending {
+  uint64_t type;
+  int64_t stream_id;
+  uint64_t app_error_code;
+} dwnx_frame_stop_sending;
+
 typedef union dwnx_frame {
   dwnx_frame_hd hd;
   dwnx_frame_qx_transport_parameters qx_transport_parameters;
   dwnx_frame_stream stream;
   dwnx_frame_reset_stream reset_stream;
+  dwnx_frame_stop_sending stop_sending;
 } dwnx_frame;
 
 #endif /* !defined(DWNX_FRAME_H) */

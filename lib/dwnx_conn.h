@@ -114,6 +114,15 @@ struct dwnx_conn {
          endpoint opens next. */
       int64_t next_stream_id;
     } bidi;
+
+    struct {
+      /* max_streams is the maximum number of unidirectional streams
+         which the local endpoint can open. */
+      uint64_t max_streams;
+      /* next_stream_id is the unidirectional stream ID which the
+         local endpoint opens next. */
+      int64_t next_stream_id;
+    } uni;
   } tx;
 
   dwnx_callbacks callbacks;
@@ -137,5 +146,30 @@ int dwnx_conn_create_stream(dwnx_conn *conn, dwnx_strm **pstrm,
 int dwnx_conn_close_stream_if_shut_rdwr(dwnx_conn *conn, dwnx_strm *strm);
 
 int dwnx_conn_close_stream(dwnx_conn *conn, dwnx_strm *strm);
+
+uint64_t dwnx_conn_tx_strmq_first_cycle(const dwnx_conn *conn);
+
+/*
+ * dwnx_conn_tx_strmq_top returns the dwnx_strm which sits on the top
+ * of queue.  tx_strmq must not be empty.
+ */
+dwnx_strm *dwnx_conn_tx_strmq_top(dwnx_conn *conn);
+
+/*
+ * dwnx_conn_tx_strmq_pop pops the dwnx_strm from the queue.  tx_strmq
+ * must not be empty.
+ */
+void dwnx_conn_tx_strmq_pop(dwnx_conn *conn);
+
+/*
+ * dwnx_conn_tx_strmq_push pushes |strm| into tx_strmq.
+ *
+ *  This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * DWNX_ERR_NOMEM
+ *     Out of memory.
+ */
+int dwnx_conn_tx_strmq_push(dwnx_conn *conn, dwnx_strm *strm);
 
 #endif /* !defined(DWNX_CONN_H) */
