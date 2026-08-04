@@ -34,6 +34,7 @@
 #include "dwnx_record_reader.h"
 #include "dwnx_map.h"
 #include "dwnx_idtr.h"
+#include "dwnx_pq.h"
 
 #define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SEEN 0x01U
 
@@ -102,6 +103,9 @@ struct dwnx_conn {
   } rx;
 
   struct {
+    /* strmq contains dwnx_strm which has frames to send. */
+    dwnx_pq strmq;
+
     struct {
       /* max_streams is the maximum number of bidirectional streams which
          the local endpoint can open. */
@@ -132,5 +136,9 @@ dwnx_strm *dwnx_conn_find_stream(const dwnx_conn *conn, int64_t stream_id);
 
 int dwnx_conn_create_stream(dwnx_conn *conn, dwnx_strm **pstrm,
                             int64_t stream_id, void *stream_user_data);
+
+int dwnx_conn_close_stream_if_shut_rdwr(dwnx_conn *conn, dwnx_strm *strm);
+
+int dwnx_conn_close_stream(dwnx_conn *conn, dwnx_strm *strm);
 
 #endif /* !defined(DWNX_CONN_H) */

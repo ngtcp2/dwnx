@@ -150,4 +150,9 @@ void dwnx_strm_free(dwnx_strm *strm);
  */
 void dwnx_strm_shutdown(dwnx_strm *strm, uint32_t flags);
 
+/*
+ * dwnx_strm_is_tx_queued returns nonzero if |strm| is queued.
+ */
+int dwnx_strm_is_tx_queued(const dwnx_strm *strm);
+
 #endif /* !defined(DWNX_STRM_H) */

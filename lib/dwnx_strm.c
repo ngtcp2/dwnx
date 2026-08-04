@@ -52,3 +52,7 @@ void dwnx_strm_free(dwnx_strm *strm) { (void)strm; }
 void dwnx_strm_shutdown(dwnx_strm *strm, uint32_t flags) {
   strm->flags |= flags & DWNX_STRM_FLAG_SHUT_RDWR;
 }
+
+int dwnx_strm_is_tx_queued(const dwnx_strm *strm) {
+  return strm->pe.index != DWNX_PQ_BAD_INDEX;
+}

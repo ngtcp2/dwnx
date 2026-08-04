@@ -82,6 +82,53 @@ static int conn_call_recv_stream_data(dwnx_conn *conn, dwnx_strm *strm,
   return 0;
 }
 
+static int conn_call_stream_close(dwnx_conn *conn, dwnx_strm *strm) {
+  int rv;
+  uint32_t flags;
+  uint64_t rx_app_error_code;
+
+  if (!conn->callbacks.stream_close) {
+    return 0;
+  }
+
+  flags = DWNX_STREAM_CLOSE_FLAG_NONE;
+
+  if (strm->flags & DWNX_STRM_FLAG_TX_STOP_SENDING_APP_ERROR_CODE_SET) {
+    flags |= DWNX_STREAM_CLOSE_FLAG_RX_APP_ERROR_CODE_SET;
+    rx_app_error_code = strm->tx.stop_sending_app_error_code;
+  } else if (strm->flags & DWNX_STRM_FLAG_RX_APP_ERROR_CODE_SET) {
+    flags |= DWNX_STREAM_CLOSE_FLAG_RX_APP_ERROR_CODE_SET;
+    rx_app_error_code = strm->rx.app_error_code;
+  } else {
+    rx_app_error_code = 0;
+  }
+
+  if (strm->flags & DWNX_STRM_FLAG_TX_RESET_STREAM_APP_ERROR_CODE_SET) {
+    flags |= DWNX_STREAM_CLOSE_FLAG_TX_APP_ERROR_CODE_SET;
+  }
+
+  rv = conn->callbacks.stream_close(conn, flags, strm->stream_id,
+                                    rx_app_error_code,
+                                    strm->tx.reset_stream_app_error_code,
+                                    conn->user_data, strm->stream_user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
+static int cycle_less(const dwnx_pq_entry *lhs, const dwnx_pq_entry *rhs) {
+  dwnx_strm *ls = dwnx_struct_of(lhs, dwnx_strm, pe);
+  dwnx_strm *rs = dwnx_struct_of(rhs, dwnx_strm, pe);
+
+  if (ls->cycle == rs->cycle) {
+    return ls->stream_id < rs->stream_id;
+  }
+
+  return rs->cycle - ls->cycle <= 1;
+}
+
 static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
                     const dwnx_transport_params *params, const dwnx_mem *mem,
                     void *user_data) {
@@ -122,6 +169,7 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   dwnx_map_init(&conn->strms, /* seed = */ 0, mem);
   dwnx_idtr_init(&conn->bidi.idtr, mem);
   dwnx_idtr_init(&conn->uni.idtr, mem);
+  dwnx_pq_init(&conn->tx.strmq, cycle_less, mem);
 
   /* Apply flow control limits */
   conn->rx.window = conn->rx.unsent_max_offset = conn->rx.max_offset =
@@ -734,4 +782,36 @@ fail:
   dwnx_mem_free(conn->mem, strm);
 
   return rv;
+}
+
+int dwnx_conn_close_stream_if_shut_rdwr(dwnx_conn *conn, dwnx_strm *strm) {
+  if ((strm->flags & DWNX_STRM_FLAG_SHUT_RDWR) != DWNX_STRM_FLAG_SHUT_RDWR) {
+    return 0;
+  }
+
+  return dwnx_conn_close_stream(conn, strm);
+}
+
+int dwnx_conn_close_stream(dwnx_conn *conn, dwnx_strm *strm) {
+  int rv;
+
+  rv = conn_call_stream_close(conn, strm);
+  if (rv != 0) {
+    return rv;
+  }
+
+  rv = dwnx_map_remove(&conn->strms, (dwnx_map_key_type)strm->stream_id);
+  if (rv != 0) {
+    assert(rv != DWNX_ERR_INVALID_ARGUMENT);
+    return rv;
+  }
+
+  if (dwnx_strm_is_tx_queued(strm)) {
+    dwnx_pq_remove(&conn->tx.strmq, &strm->pe);
+  }
+
+  dwnx_strm_free(strm);
+  dwnx_mem_free(conn->mem, strm);
+
+  return 0;
 }

@@ -22,8 +22,8 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#ifndef NGTCP2_H
-#define NGTCP2_H
+#ifndef DWNX_H
+#define DWNX_H
 
 /* Define WIN32 when build target is Win32 API (borrowed from
    libcurl) */
@@ -674,6 +674,72 @@ typedef int (*dwnx_recv_stream_data)(dwnx_conn *conn, uint32_t flags,
 typedef int (*dwnx_stream_open)(dwnx_conn *conn, int64_t stream_id,
                                 void *user_data);
 
+/**
+ * @macrosection
+ *
+ * Stream close flags for :type:`dwnx_stream_close` callback.
+ */
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_STREAM_CLOSE_FLAG_NONE` indicates no flag set.
+ */
+#define DWNX_STREAM_CLOSE_FLAG_NONE 0x00U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_STREAM_CLOSE_FLAG_RX_APP_ERROR_CODE_SET` indicates
+ * that rx_app_error_code parameter is set.
+ */
+#define DWNX_STREAM_CLOSE_FLAG_RX_APP_ERROR_CODE_SET 0x01U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_STREAM_CLOSE_FLAG_TX_APP_ERROR_CODE_SET` indicates
+ * that tx_app_error_code parameter is set.
+ */
+#define DWNX_STREAM_CLOSE_FLAG_TX_APP_ERROR_CODE_SET 0x02U
+
+/**
+ * @functypedef
+ *
+ * :type:`dwnx_stream_close` is invoked when a stream is closed.  This
+ * callback is not called when QUIC connection is closed before
+ * existing streams are closed.  |flags| is the bitwise-OR of zero or
+ * more of :macro:`DWNX_STREAM_CLOSE_FLAG_*
+ * <DWNX_STREAM_CLOSE_FLAG_NONE>`.  |rx_app_error_code| indicates the
+ * error code that shut down the receiving side of the stream if
+ * :macro:`DWNX_STREAM_CLOSE_FLAG_RX_APP_ERROR_CODE_SET` is set in
+ * |flags|.  |tx_app_error_code| indicates the error code that shut
+ * down the sending side of the stream if
+ * :macro:`DWNX_STREAM_CLOSE_FLAG_TX_APP_ERROR_CODE_SET` is set in
+ * |flags|.
+ *
+ * Because QUIC can close the send and receive sides of a stream
+ * independently, this callback has 2 application error codes for both
+ * directions.  No error code means that its direction of a stream is
+ * closed cleanly.  For example, a client gets STOP_SENDING frame from
+ * a server, and it sends back RESET_STREAM frame with the error code
+ * included in STOP_SENDING frame.  This error code is reported as
+ * |tx_app_error_code| and
+ * :macro:`DWNX_STREAM_CLOSE_FLAG_TX_APP_ERROR_CODE_SET` is set in
+ * |flags|.  Meanwhile, the client receives the response body without
+ * any error.  Then
+ * :macro:`DWNX_STREAM_CLOSE_FLAG_RX_APP_ERROR_CODE_SET` is not set in
+ * |flags|.
+ *
+ * The implementation of this callback should return 0 if it succeeds.
+ * Returning :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library
+ * call return immediately.
+ */
+typedef int (*dwnx_stream_close)(dwnx_conn *conn, uint32_t flags,
+                                 int64_t stream_id, uint64_t rx_app_error_code,
+                                 uint64_t tx_app_error_code, void *user_data,
+                                 void *stream_user_data);
+
 typedef struct dwnx_callbacks {
   /**
    * :member:`recv_stream_data` is a callback function which is
@@ -687,6 +753,11 @@ typedef struct dwnx_callbacks {
    * callback function is optional.
    */
   dwnx_stream_open stream_open;
+  /**
+   * :member:`stream_close` is a callback function which is invoked
+   * when a stream is closed.  This callback function is optional.
+   */
+  dwnx_stream_close stream_close;
 } dwnx_callbacks;
 
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
