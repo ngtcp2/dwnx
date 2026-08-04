@@ -81,20 +81,26 @@ dwnx_ssize dwnx_varint_reader_read(dwnx_varint_reader *vird,
   return (dwnx_ssize)len;
 }
 
-void dwnx_record_reader_reset(dwnx_record_reader *rcrd, const dwnx_mem *mem) {
-  dwnx_mem_free(mem, rcrd->buf.begin);
-
-  *rcrd = (dwnx_record_reader){0};
-}
-
-void dwnx_record_reader_next_frame(dwnx_record_reader *rcrd,
-                                   const dwnx_mem *mem) {
+static void record_reader_next_frame(dwnx_record_reader *rcrd,
+                                     const dwnx_mem *mem) {
   if (rcrd->buf.begin) {
     dwnx_mem_free(mem, rcrd->buf.begin);
     rcrd->buf = (dwnx_buf){0};
   }
 
   rcrd->state = DWNX_RECORD_READ_STATE_FRAME_TYPE;
+}
+
+void dwnx_record_reader_reset(dwnx_record_reader *rcrd, const dwnx_mem *mem) {
+  if (rcrd->record_left) {
+    record_reader_next_frame(rcrd, mem);
+
+    return;
+  }
+
+  dwnx_mem_free(mem, rcrd->buf.begin);
+
+  *rcrd = (dwnx_record_reader){0};
 }
 
 size_t dwnx_record_reader_avail(dwnx_record_reader *rcrd, size_t len) {

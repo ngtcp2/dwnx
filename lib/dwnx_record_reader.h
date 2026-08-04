@@ -76,15 +76,9 @@ typedef struct dwnx_record_reader {
   dwnx_buf buf;
 } dwnx_record_reader;
 
-/* dwnx_record_reader_reset resets per-record state.  |rcrd|->buf is
-   freed and the other fields are also reset. */
+/* dwnx_record_reader_reset resets per-frame or per-record state.
+   |rcrd|->buf is freed. */
 void dwnx_record_reader_reset(dwnx_record_reader *rcrd, const dwnx_mem *mem);
-
-/* dwnx_record_reader_next_frame resets per-frame state.  After this
-   call, |rcrd| is ready to read the next frame.  |rcrd|->buf is freed
-   and |rcrd|->state is reset to DWNX_RECORD_READ_STATE_FRAME_TYPE. */
-void dwnx_record_reader_next_frame(dwnx_record_reader *rcrd,
-                                   const dwnx_mem *mem);
 
 /* dwnx_record_reader_avail returns the number of bytes to read from
    the given data of length |len|, taking into account the remainder

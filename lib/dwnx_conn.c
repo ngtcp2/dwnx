@@ -591,11 +591,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
     continue;
 
   frame_done:
-    if (rcrd->record_left) {
-      dwnx_record_reader_next_frame(rcrd, mem);
-    } else {
-      dwnx_record_reader_reset(rcrd, mem);
-    }
+    dwnx_record_reader_reset(rcrd, mem);
   }
 
   return 0;
