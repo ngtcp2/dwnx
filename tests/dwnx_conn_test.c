@@ -45,6 +45,8 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_stream_data_blocked),
   munit_void_test(test_dwnx_conn_recv_streams_blocked_bidi),
   munit_void_test(test_dwnx_conn_recv_streams_blocked_uni),
+  munit_void_test(test_dwnx_conn_recv_connection_close),
+  munit_void_test(test_dwnx_conn_recv_connection_close_app),
   munit_test_end(),
 };
 
@@ -1327,6 +1329,122 @@ void test_dwnx_conn_recv_streams_blocked_uni(void) {
   assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
               conn->rx.rcrd.state);
   assert_size(0, ==, conn->rx.rcrd.record_left);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_connection_close(void) {
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  const uint8_t reason[] = "bye";
+  size_t i;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.connection_close = (dwnx_frame_connection_close){
+    .type = DWNX_FRAME_CONNECTION_CLOSE,
+    .error_code = 1000000007,
+    .frame_type = 1000000009,
+    .reasonlen = dwnx_strlen_lit(reason),
+    .reason = (uint8_t *)reason,
+  };
+
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_DRAINING, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.connection_close = (dwnx_frame_connection_close){
+    .type = DWNX_FRAME_CONNECTION_CLOSE,
+    .error_code = 1000000007,
+    .frame_type = 1000000009,
+    .reasonlen = dwnx_strlen_lit(reason),
+    .reason = (uint8_t *)reason,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  for (i = 0; i < dwnx_buf_len(&buf) - 1; ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+  }
+
+  rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+  assert_int(DWNX_ERR_DRAINING, ==, rv);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_connection_close_app(void) {
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  const uint8_t reason[] = "bye";
+  size_t i;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.connection_close = (dwnx_frame_connection_close){
+    .type = DWNX_FRAME_CONNECTION_CLOSE_APP,
+    .error_code = 1000000007,
+    .reasonlen = dwnx_strlen_lit(reason),
+    .reason = (uint8_t *)reason,
+  };
+
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_DRAINING, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.connection_close = (dwnx_frame_connection_close){
+    .type = DWNX_FRAME_CONNECTION_CLOSE_APP,
+    .error_code = 1000000007,
+    .reasonlen = dwnx_strlen_lit(reason),
+    .reason = (uint8_t *)reason,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  for (i = 0; i < dwnx_buf_len(&buf) - 1; ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+  }
+
+  rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+  assert_int(DWNX_ERR_DRAINING, ==, rv);
 
   dwnx_conn_del(conn);
 }

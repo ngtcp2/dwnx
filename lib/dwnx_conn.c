@@ -990,6 +990,17 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         rcrd->state = DWNX_RECORD_READ_STATE_STREAMS_BLOCKED_MAX_STREAMS;
 
         break;
+      case DWNX_FRAME_CONNECTION_CLOSE:
+      case DWNX_FRAME_CONNECTION_CLOSE_APP:
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.connection_close.type = vint;
+
+        rcrd->state = DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_ERROR_CODE;
+
+        break;
       default:
         if ((vint & ~(DWNX_FRAME_STREAM - 1)) == DWNX_FRAME_STREAM) {
           if (rcrd->record_left == 0) {
@@ -1040,7 +1051,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
          application to change it), the size is smaller than
          DWNX_DEFAULT_MAX_RECORD_SIZE. */
       if (vint > rcrd->record_left) {
-        return DWNX_ERR_INTERNAL;
+        return DWNX_ERR_FRAME_ENCODING;
       }
 
       if (p + vint <= end) {
@@ -1571,6 +1582,120 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       /* TODO: Process STREAMS_BLOCKED */
 
       goto frame_done;
+    case DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_ERROR_CODE:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.connection_close.error_code = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      if (rcrd->record_left == 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      if (rcrd->fr.connection_close.type == DWNX_FRAME_CONNECTION_CLOSE_APP) {
+        rcrd->state = DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASONLEN;
+
+        break;
+      }
+
+      rcrd->state = DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_FRAME_TYPE;
+
+      if (p == end) {
+        return 0;
+      }
+
+      /* Fall through */
+    case DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_FRAME_TYPE:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.connection_close.frame_type = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      if (rcrd->record_left == 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      rcrd->state = DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASONLEN;
+
+      if (p == end) {
+        return 0;
+      }
+
+      /* Fall through */
+    case DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASONLEN:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.connection_close.reasonlen = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      if (rcrd->fr.connection_close.reasonlen > rcrd->record_left) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      if (p + rcrd->fr.connection_close.reasonlen <= end) {
+        /* reason is fit within [p..end) */
+        rcrd->state = DWNX_RECORD_READ_STATE_DRAINING;
+
+        return DWNX_ERR_DRAINING;
+      }
+
+      rcrd->field_left = rcrd->fr.connection_close.reasonlen;
+      rcrd->state = DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASON;
+
+      if (p == end) {
+        return 0;
+      }
+
+      /* Fall through */
+    case DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASON:
+      len = dwnx_record_reader_field_avail(rcrd, (size_t)(end - p));
+
+      p += len;
+      rcrd->record_left -= len;
+      rcrd->field_left -= len;
+
+      if (rcrd->field_left) {
+        return 0;
+      }
+
+      rcrd->state = DWNX_RECORD_READ_STATE_DRAINING;
+
+      return DWNX_ERR_DRAINING;
+    case DWNX_RECORD_READ_STATE_DRAINING:
+      return DWNX_ERR_DRAINING;
     default:
       dwnx_unreachable();
     }

@@ -119,6 +119,16 @@ typedef struct dwnx_frame_streams_blocked {
   uint64_t max_streams;
 } dwnx_frame_streams_blocked;
 
+typedef struct dwnx_frame_connection_close {
+  uint64_t type;
+  uint64_t error_code;
+  /* frame_type is only filled when type ==
+     DWNX_FRAME_CONNECTION_CLOSE */
+  uint64_t frame_type;
+  size_t reasonlen;
+  uint8_t *reason;
+} dwnx_frame_connection_close;
+
 typedef union dwnx_frame {
   dwnx_frame_hd hd;
   dwnx_frame_qx_transport_parameters qx_transport_parameters;
@@ -131,6 +141,7 @@ typedef union dwnx_frame {
   dwnx_frame_data_blocked data_blocked;
   dwnx_frame_stream_data_blocked stream_data_blocked;
   dwnx_frame_streams_blocked streams_blocked;
+  dwnx_frame_connection_close connection_close;
 } dwnx_frame;
 
 #endif /* !defined(DWNX_FRAME_H) */

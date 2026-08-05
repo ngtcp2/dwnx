@@ -29,6 +29,7 @@
 #include "dwnx_unreachable.h"
 #include "dwnx_record_reader.h"
 #include "dwnx_conn.h"
+#include "dwnx_str.h"
 
 void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
   uint8_t *p;
@@ -124,6 +125,21 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
   case DWNX_FRAME_STREAMS_BLOCKED_UNI:
     dest->last = dwnx_put_uvarint(dest->last, fr->streams_blocked.type);
     dest->last = dwnx_put_uvarint(dest->last, fr->streams_blocked.max_streams);
+
+    return;
+  case DWNX_FRAME_CONNECTION_CLOSE:
+  case DWNX_FRAME_CONNECTION_CLOSE_APP:
+    dest->last = dwnx_put_uvarint(dest->last, fr->connection_close.type);
+    dest->last = dwnx_put_uvarint(dest->last, fr->connection_close.error_code);
+
+    if (fr->connection_close.type == DWNX_FRAME_CONNECTION_CLOSE) {
+      dest->last =
+        dwnx_put_uvarint(dest->last, fr->connection_close.frame_type);
+    }
+
+    dest->last = dwnx_put_uvarint(dest->last, fr->connection_close.reasonlen);
+    dest->last = dwnx_cpymem(dest->last, fr->connection_close.reason,
+                             fr->connection_close.reasonlen);
 
     return;
   default:
