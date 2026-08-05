@@ -41,6 +41,8 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_max_stream_data),
   munit_void_test(test_dwnx_conn_recv_max_streams_bidi),
   munit_void_test(test_dwnx_conn_recv_max_streams_uni),
+  munit_void_test(test_dwnx_conn_recv_data_blocked),
+  munit_void_test(test_dwnx_conn_recv_stream_data_blocked),
   munit_test_end(),
 };
 
@@ -1095,6 +1097,118 @@ void test_dwnx_conn_recv_max_streams_uni(void) {
   assert_size(1, ==, ud.extend_max_local_streams_uni.ncalled);
   assert_uint64(1000000007, ==, ud.extend_max_local_streams_uni.max_streams);
   assert_uint64(1000000007, ==, conn->tx.uni.max_streams);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_data_blocked(void) {
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  size_t i;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.data_blocked = (dwnx_frame_data_blocked){
+    .type = DWNX_FRAME_DATA_BLOCKED,
+    .offset = 64 * 1024,
+  };
+
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.data_blocked = (dwnx_frame_data_blocked){
+    .type = DWNX_FRAME_DATA_BLOCKED,
+    .offset = 64 * 1024,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  for (i = 0; i < dwnx_buf_len(&buf); ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+  }
+
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_stream_data_blocked(void) {
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  size_t i;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.stream_data_blocked = (dwnx_frame_stream_data_blocked){
+    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .stream_id = 4,
+    .offset = 64 * 1024,
+  };
+
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.stream_data_blocked = (dwnx_frame_stream_data_blocked){
+    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .stream_id = 4,
+    .offset = 64 * 1024,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  for (i = 0; i < dwnx_buf_len(&buf); ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+  }
+
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
 
   dwnx_conn_del(conn);
 }

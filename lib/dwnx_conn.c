@@ -959,6 +959,26 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         rcrd->state = DWNX_RECORD_READ_STATE_MAX_STREAMS_MAX_STREAMS;
 
         break;
+      case DWNX_FRAME_DATA_BLOCKED:
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.data_blocked.type = DWNX_FRAME_DATA_BLOCKED;
+
+        rcrd->state = DWNX_RECORD_READ_STATE_DATA_BLOCKED_OFFSET;
+
+        break;
+      case DWNX_FRAME_STREAM_DATA_BLOCKED:
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.stream_data_blocked.type = DWNX_FRAME_STREAM_DATA_BLOCKED;
+
+        rcrd->state = DWNX_RECORD_READ_STATE_STREAM_DATA_BLOCKED_STREAM_ID;
+
+        break;
       default:
         if ((vint & ~(DWNX_FRAME_STREAM - 1)) == DWNX_FRAME_STREAM) {
           if (rcrd->record_left == 0) {
@@ -1450,6 +1470,74 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       if (rv != 0) {
         return rv;
       }
+
+      goto frame_done;
+    case DWNX_RECORD_READ_STATE_DATA_BLOCKED_OFFSET:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.data_blocked.offset = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      /* TODO: Process DATA_BLOCKED */
+
+      goto frame_done;
+    case DWNX_RECORD_READ_STATE_STREAM_DATA_BLOCKED_STREAM_ID:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.stream_data_blocked.stream_id = (int64_t)vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      if (rcrd->record_left == 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      rcrd->state = DWNX_RECORD_READ_STATE_STREAM_DATA_BLOCKED_OFFSET;
+
+      if (p == end) {
+        return 0;
+      }
+
+      /* Fall through */
+    case DWNX_RECORD_READ_STATE_STREAM_DATA_BLOCKED_OFFSET:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.stream_data_blocked.offset = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      /* TODO: Process STREAM_DATA_BLOCKED */
 
       goto frame_done;
     default:
