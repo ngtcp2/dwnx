@@ -154,6 +154,24 @@ static int conn_call_recv_stop_sending(dwnx_conn *conn, int64_t stream_id,
   return 0;
 }
 
+static int conn_call_extend_max_stream_data(dwnx_conn *conn, dwnx_strm *strm,
+                                            int64_t stream_id,
+                                            uint64_t datalen) {
+  int rv;
+
+  if (!conn->callbacks.extend_max_stream_data) {
+    return 0;
+  }
+
+  rv = conn->callbacks.extend_max_stream_data(
+    conn, stream_id, datalen, conn->user_data, strm->stream_user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
 static int cycle_less(const dwnx_pq_entry *lhs, const dwnx_pq_entry *rhs) {
   dwnx_strm *ls = dwnx_struct_of(lhs, dwnx_strm, pe);
   dwnx_strm *rs = dwnx_struct_of(rhs, dwnx_strm, pe);
@@ -652,6 +670,91 @@ static int conn_recv_stop_sending(dwnx_conn *conn,
   return 0;
 }
 
+static int conn_recv_max_data(dwnx_conn *conn, const dwnx_frame_max_data *fr,
+                              dwnx_tstamp ts) {
+  (void)ts;
+
+  if (conn->tx.max_offset >= fr->max_data) {
+    return DWNX_ERR_PROTO;
+  }
+
+  conn->tx.max_offset = fr->max_data;
+
+  return 0;
+}
+
+static int conn_recv_max_stream_data(dwnx_conn *conn,
+                                     const dwnx_frame_max_stream_data *fr,
+                                     dwnx_tstamp ts) {
+  dwnx_strm *strm;
+  dwnx_idtr *idtr;
+  int local_stream = conn_local_stream(conn, fr->stream_id);
+  int bidi = bidi_stream(fr->stream_id);
+  int rv;
+  (void)ts;
+
+  if (bidi) {
+    if (local_stream) {
+      if (conn->tx.bidi.next_stream_id <= fr->stream_id) {
+        return DWNX_ERR_STREAM_STATE;
+      }
+    } else if (conn->rx.bidi.max_streams < dwnx_ord_stream_id(fr->stream_id)) {
+      return DWNX_ERR_STREAM_LIMIT;
+    }
+
+    idtr = &conn->bidi.idtr;
+  } else {
+    if (!local_stream || conn->tx.uni.next_stream_id <= fr->stream_id) {
+      return DWNX_ERR_STREAM_STATE;
+    }
+
+    idtr = &conn->uni.idtr;
+  }
+
+  strm = dwnx_conn_find_stream(conn, fr->stream_id);
+  if (strm == NULL) {
+    if (local_stream) {
+      /* Stream has been closed. */
+      return 0;
+    }
+
+    rv = dwnx_idtr_open(idtr, fr->stream_id);
+    if (rv != 0) {
+      if (dwnx_err_is_fatal(rv)) {
+        return rv;
+      }
+
+      assert(rv == DWNX_ERR_STREAM_IN_USE);
+
+      return 0;
+    }
+
+    rv = dwnx_conn_create_stream(conn, &strm, fr->stream_id, NULL);
+    if (rv != 0) {
+      return rv;
+    }
+
+    rv = conn_call_stream_open(conn, strm);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
+  if (strm->tx.max_offset >= fr->max_stream_data) {
+    return DWNX_ERR_PROTO;
+  }
+
+  strm->tx.max_offset = fr->max_stream_data;
+
+  /* Don't call callback if stream is half-closed local */
+  if (strm->flags & DWNX_STRM_FLAG_SHUT_WR) {
+    return 0;
+  }
+
+  return conn_call_extend_max_stream_data(conn, strm, fr->stream_id,
+                                          fr->max_stream_data);
+}
+
 int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
                    dwnx_tstamp ts) {
   const uint8_t *p, *end;
@@ -761,6 +864,26 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         rcrd->fr.stop_sending.type = DWNX_FRAME_STOP_SENDING;
 
         rcrd->state = DWNX_RECORD_READ_STATE_STOP_SENDING_STREAM_ID;
+
+        break;
+      case DWNX_FRAME_MAX_DATA:
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.max_data.type = DWNX_FRAME_MAX_DATA;
+
+        rcrd->state = DWNX_RECORD_READ_STATE_MAX_DATA_MAX_DATA;
+
+        break;
+      case DWNX_FRAME_MAX_STREAM_DATA:
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.max_stream_data.type = DWNX_FRAME_MAX_STREAM_DATA;
+
+        rcrd->state = DWNX_RECORD_READ_STATE_MAX_STREAM_DATA_STREAM_ID;
 
         break;
       default:
@@ -1154,6 +1277,80 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       dwnx_varint_reader_reset(vird);
 
       rv = conn_recv_stop_sending(conn, &rcrd->fr.stop_sending, ts);
+      if (rv != 0) {
+        return rv;
+      }
+
+      goto frame_done;
+    case DWNX_RECORD_READ_STATE_MAX_DATA_MAX_DATA:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.max_data.max_data = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      rv = conn_recv_max_data(conn, &rcrd->fr.max_data, ts);
+      if (rv != 0) {
+        return rv;
+      }
+
+      goto frame_done;
+    case DWNX_RECORD_READ_STATE_MAX_STREAM_DATA_STREAM_ID:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.max_stream_data.stream_id = (int64_t)vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      if (rcrd->record_left == 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      rcrd->state = DWNX_RECORD_READ_STATE_MAX_STREAM_DATA_MAX_STREAM_DATA;
+
+      if (p == end) {
+        return 0;
+      }
+
+      /* Fall through */
+    case DWNX_RECORD_READ_STATE_MAX_STREAM_DATA_MAX_STREAM_DATA:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.max_stream_data.max_stream_data = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      rv = conn_recv_max_stream_data(conn, &rcrd->fr.max_stream_data, ts);
       if (rv != 0) {
         return rv;
       }

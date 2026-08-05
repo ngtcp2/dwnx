@@ -27,6 +27,8 @@
 #include "dwnx_transport_params.h"
 #include "dwnx_conv.h"
 #include "dwnx_unreachable.h"
+#include "dwnx_record_reader.h"
+#include "dwnx_conn.h"
 
 void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
   uint8_t *p;
@@ -87,6 +89,19 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
     dest->last = dwnx_put_uvarint(dest->last, fr->stop_sending.app_error_code);
 
     return;
+  case DWNX_FRAME_MAX_DATA:
+    dest->last = dwnx_put_uvarint(dest->last, fr->max_data.type);
+    dest->last = dwnx_put_uvarint(dest->last, fr->max_data.max_data);
+
+    return;
+  case DWNX_FRAME_MAX_STREAM_DATA:
+    dest->last = dwnx_put_uvarint(dest->last, fr->max_stream_data.type);
+    dest->last =
+      dwnx_put_uvarint(dest->last, (uint64_t)fr->max_stream_data.stream_id);
+    dest->last =
+      dwnx_put_uvarint(dest->last, fr->max_stream_data.max_stream_data);
+
+    return;
   default:
     dwnx_unreachable();
   }
@@ -102,4 +117,26 @@ void dwnx_write_record(dwnx_buf *dest, const dwnx_frame *fr, size_t n) {
   }
 
   dwnx_put_uvarintw(p, (uint64_t)(dest->last - p - 2), 2);
+}
+
+void dwnx_read_transport_params(dwnx_conn *conn,
+                                const dwnx_frame_qx_transport_parameters *fr,
+                                dwnx_tstamp ts) {
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+  dwnx_write_record(&buf,
+                    &(dwnx_frame){
+                      .qx_transport_parameters = *fr,
+                    },
+                    1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
 }

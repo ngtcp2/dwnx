@@ -771,6 +771,22 @@ typedef int (*dwnx_recv_stop_sending)(dwnx_conn *conn, int64_t stream_id,
                                       uint64_t app_error_code, void *user_data,
                                       void *stream_user_data);
 
+/**
+ * @functypedef
+ *
+ * :type:`dwnx_extend_max_stream_data` is a callback function which is
+ * invoked when max stream data is extended.  |stream_id| identifies
+ * the stream.  |max_data| is a cumulative number of bytes an endpoint
+ * can send on this stream.
+ *
+ * The callback function must return 0 if it succeeds.  Returning
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library call return
+ * immediately.
+ */
+typedef int (*dwnx_extend_max_stream_data)(dwnx_conn *conn, int64_t stream_id,
+                                           uint64_t max_data, void *user_data,
+                                           void *stream_user_data);
+
 typedef struct dwnx_callbacks {
   /**
    * :member:`recv_stream_data` is a callback function which is
@@ -801,6 +817,13 @@ typedef struct dwnx_callbacks {
    * callback function is optional.
    */
   dwnx_recv_stop_sending recv_stop_sending;
+  /**
+   * :member:`extend_max_stream_data` is callback function which is
+   * invoked when the maximum offset of stream data that a local
+   * endpoint can send is increased.  This callback function is
+   * optional.
+   */
+  dwnx_extend_max_stream_data extend_max_stream_data;
 } dwnx_callbacks;
 
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,

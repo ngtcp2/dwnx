@@ -105,6 +105,9 @@ struct dwnx_conn {
   struct {
     /* strmq contains dwnx_strm which has frames to send. */
     dwnx_pq strmq;
+    /* max_offset is the maximum offset that local endpoint can
+       send. */
+    uint64_t max_offset;
 
     struct {
       /* max_streams is the maximum number of bidirectional streams which
