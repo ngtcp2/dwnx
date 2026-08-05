@@ -334,6 +334,31 @@ static int conn_reset_stream(dwnx_conn *conn, dwnx_strm *strm,
   return dwnx_conn_tx_strmq_push(conn, strm);
 }
 
+/*
+ * conn_stop_sending adds STOP_SENDING frame to the transmission
+ * queue.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * DWNX_ERR_NOMEM
+ *     Out of memory.
+ */
+static int conn_stop_sending(dwnx_conn *conn, dwnx_strm *strm,
+                             uint64_t app_error_code) {
+  strm->flags |= DWNX_STRM_FLAG_SEND_STOP_SENDING |
+                 DWNX_STRM_FLAG_TX_STOP_SENDING_APP_ERROR_CODE_SET;
+  strm->tx.stop_sending_app_error_code = app_error_code;
+
+  if (dwnx_strm_is_tx_queued(strm)) {
+    return 0;
+  }
+
+  strm->cycle = dwnx_conn_tx_strmq_first_cycle(conn);
+
+  return dwnx_conn_tx_strmq_push(conn, strm);
+}
+
 static int conn_recv_stream(dwnx_conn *conn, const dwnx_frame_stream *fr,
                             dwnx_tstamp ts) {
   dwnx_idtr *idtr;
@@ -1277,4 +1302,110 @@ void dwnx_conn_tx_strmq_pop(dwnx_conn *conn) {
 
 int dwnx_conn_tx_strmq_push(dwnx_conn *conn, dwnx_strm *strm) {
   return dwnx_pq_push(&conn->tx.strmq, &strm->pe);
+}
+
+/*
+ * conn_shutdown_stream_write closes send stream with error code
+ * |app_error_code|.  RESET_STREAM frame is scheduled.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * DWNX_ERR_NOMEM
+ *     Out of memory.
+ */
+static int conn_shutdown_stream_write(dwnx_conn *conn, dwnx_strm *strm,
+                                      uint64_t app_error_code) {
+  if (strm->flags & DWNX_STRM_FLAG_SHUT_WR) {
+    return 0;
+  }
+
+  /* Set this flag so that we don't accidentally send DATA to this
+     stream. */
+  strm->flags |= DWNX_STRM_FLAG_SHUT_WR | DWNX_STRM_FLAG_RESET_STREAM;
+
+  return conn_reset_stream(conn, strm, app_error_code);
+}
+
+/*
+ * conn_shutdown_stream_read closes read stream with error code
+ * |app_error_code|.  STOP_SENDING frame is scheduled.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * DWNX_ERR_NOMEM
+ *     Out of memory.
+ */
+static int conn_shutdown_stream_read(dwnx_conn *conn, dwnx_strm *strm,
+                                     uint64_t app_error_code) {
+  if (strm->flags & (DWNX_STRM_FLAG_STOP_SENDING | DWNX_STRM_FLAG_SHUT_RD)) {
+    return 0;
+  }
+  strm->flags |= DWNX_STRM_FLAG_STOP_SENDING;
+
+  return conn_stop_sending(conn, strm, app_error_code);
+}
+
+int dwnx_conn_shutdown_stream(dwnx_conn *conn, uint32_t flags,
+                              int64_t stream_id, uint64_t app_error_code) {
+  int rv;
+  dwnx_strm *strm;
+  (void)flags;
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+  if (!strm) {
+    return 0;
+  }
+
+  if (bidi_stream(stream_id) || !conn_local_stream(conn, stream_id)) {
+    rv = conn_shutdown_stream_read(conn, strm, app_error_code);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
+  if (bidi_stream(stream_id) || conn_local_stream(conn, stream_id)) {
+    rv = conn_shutdown_stream_write(conn, strm, app_error_code);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
+  return 0;
+}
+
+int dwnx_conn_shutdown_stream_write(dwnx_conn *conn, uint32_t flags,
+                                    int64_t stream_id,
+                                    uint64_t app_error_code) {
+  dwnx_strm *strm;
+  (void)flags;
+
+  if (!bidi_stream(stream_id) && !conn_local_stream(conn, stream_id)) {
+    return DWNX_ERR_INVALID_ARGUMENT;
+  }
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+  if (!strm) {
+    return 0;
+  }
+
+  return conn_shutdown_stream_write(conn, strm, app_error_code);
+}
+
+int dwnx_conn_shutdown_stream_read(dwnx_conn *conn, uint32_t flags,
+                                   int64_t stream_id, uint64_t app_error_code) {
+  dwnx_strm *strm;
+  (void)flags;
+
+  if (!bidi_stream(stream_id) && conn_local_stream(conn, stream_id)) {
+    return DWNX_ERR_INVALID_ARGUMENT;
+  }
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+  if (!strm) {
+    return 0;
+  }
+
+  return conn_shutdown_stream_read(conn, strm, app_error_code);
 }

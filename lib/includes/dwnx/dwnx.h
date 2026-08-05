@@ -830,6 +830,90 @@ DWNX_EXTERN void dwnx_conn_extend_max_offset(dwnx_conn *conn, uint64_t datalen);
 /**
  * @function
  *
+ * `dwnx_conn_shutdown_stream` closes a stream denoted by |stream_id|
+ * abruptly.  |app_error_code| is one of application error codes, and
+ * indicates the reason of shutdown.  Successful call of this function
+ * does not immediately erase the state of the stream.  The actual
+ * deletion is done when the remote endpoint sends acknowledgement.
+ * Calling this function is equivalent to call
+ * `dwnx_conn_shutdown_stream_read`, and
+ * `dwnx_conn_shutdown_stream_write` sequentially with the following
+ * differences.  If |stream_id| refers to a local unidirectional
+ * stream, this function only shutdowns write side of the stream.  If
+ * |stream_id| refers to a remote unidirectional stream, this function
+ * only shutdowns read side of the stream.
+ *
+ * |flags| is currently unused, and should be set to 0.
+ *
+ * This function returns 0 if a stream denoted by |stream_id| is not
+ * found.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory
+ */
+DWNX_EXTERN int dwnx_conn_shutdown_stream(dwnx_conn *conn, uint32_t flags,
+                                          int64_t stream_id,
+                                          uint64_t app_error_code);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_shutdown_stream_write` closes write-side of a stream
+ * denoted by |stream_id| abruptly.  |app_error_code| is one of
+ * application error codes, and indicates the reason of shutdown.  If
+ * this function succeeds, no further application data is sent to the
+ * remote endpoint.  It discards all data which has not been
+ * acknowledged yet.
+ *
+ * |flags| is currently unused, and should be set to 0.
+ *
+ * This function returns 0 if a stream denoted by |stream_id| is not
+ * found.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory
+ * :macro:`DWNX_ERR_INVALID_ARGUMENT`
+ *     |stream_id| refers to a remote unidirectional stream.
+ */
+DWNX_EXTERN int dwnx_conn_shutdown_stream_write(dwnx_conn *conn, uint32_t flags,
+                                                int64_t stream_id,
+                                                uint64_t app_error_code);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_shutdown_stream_read` closes read-side of a stream
+ * denoted by |stream_id| abruptly.  |app_error_code| is one of
+ * application error codes, and indicates the reason of shutdown.  If
+ * this function succeeds, no further application data is forwarded to
+ * an application layer.
+ *
+ * |flags| is currently unused, and should be set to 0.
+ *
+ * This function returns 0 if a stream denoted by |stream_id| is not
+ * found.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory
+ * :macro:`DWNX_ERR_INVALID_ARGUMENT`
+ *     |stream_id| refers to a local unidirectional stream.
+ */
+DWNX_EXTERN int dwnx_conn_shutdown_stream_read(dwnx_conn *conn, uint32_t flags,
+                                               int64_t stream_id,
+                                               uint64_t app_error_code);
+
+/**
+ * @function
+ *
  * `dwnx_err_is_fatal` returns nonzero if |liberr| is a fatal error.
  * |liberr| must be one of dwnx library error codes (which is defined
  * as :macro:`DWNX_ERR_* <DWNX_ERR_INVALID_ARGUMENT>` macros).
