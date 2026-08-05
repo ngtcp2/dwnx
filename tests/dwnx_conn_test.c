@@ -47,6 +47,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_streams_blocked_uni),
   munit_void_test(test_dwnx_conn_recv_connection_close),
   munit_void_test(test_dwnx_conn_recv_connection_close_app),
+  munit_void_test(test_dwnx_conn_recv_padding),
   munit_test_end(),
 };
 
@@ -1445,6 +1446,36 @@ void test_dwnx_conn_recv_connection_close_app(void) {
   rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
 
   assert_int(DWNX_ERR_DRAINING, ==, rv);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_padding(void) {
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.padding = (dwnx_frame_padding){
+    .type = DWNX_FRAME_PADDING,
+    .len = 100,
+  };
+
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
 
   dwnx_conn_del(conn);
 }

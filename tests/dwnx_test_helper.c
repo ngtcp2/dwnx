@@ -50,6 +50,11 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
     dwnx_put_uvarintw(p, (size_t)nwrite, 2);
 
     return;
+  case DWNX_FRAME_PADDING:
+    memset(dest->last, 0, fr->padding.len);
+    dest->last += fr->padding.len;
+
+    return;
   case DWNX_FRAME_STREAM:
     flags = fr->stream.flags;
     if (fr->stream.offset) {

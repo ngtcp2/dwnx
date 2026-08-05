@@ -908,6 +908,12 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         rcrd->state = DWNX_RECORD_READ_STATE_QX_TRANSPORT_PARAMETERS_LEN;
 
         break;
+      case DWNX_FRAME_PADDING:
+        for (; p != end && rcrd->record_left && *p == DWNX_FRAME_PADDING;
+             ++p, --rcrd->record_left)
+          ;
+
+        goto frame_done;
       case DWNX_FRAME_RESET_STREAM:
         if (rcrd->record_left == 0) {
           return DWNX_ERR_FRAME_ENCODING;

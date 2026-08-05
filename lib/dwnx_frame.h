@@ -62,6 +62,12 @@ typedef struct dwnx_frame_qx_transport_parameters {
   dwnx_transport_params *params;
 } dwnx_frame_qx_transport_parameters;
 
+typedef struct dwnx_frame_padding {
+  uint64_t type;
+  /* len is the length of contiguous PADDING frames. */
+  size_t len;
+} dwnx_frame_padding;
+
 typedef struct dwnx_frame_stream {
   uint64_t type;
   uint8_t flags;
@@ -132,6 +138,7 @@ typedef struct dwnx_frame_connection_close {
 typedef union dwnx_frame {
   dwnx_frame_hd hd;
   dwnx_frame_qx_transport_parameters qx_transport_parameters;
+  dwnx_frame_padding padding;
   dwnx_frame_stream stream;
   dwnx_frame_reset_stream reset_stream;
   dwnx_frame_stop_sending stop_sending;
