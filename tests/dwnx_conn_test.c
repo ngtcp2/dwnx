@@ -48,6 +48,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_connection_close),
   munit_void_test(test_dwnx_conn_recv_connection_close_app),
   munit_void_test(test_dwnx_conn_recv_padding),
+  munit_void_test(test_dwnx_conn_recv_qx_ping),
   munit_test_end(),
 };
 
@@ -1476,6 +1477,87 @@ void test_dwnx_conn_recv_padding(void) {
   assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
               conn->rx.rcrd.state);
   assert_size(0, ==, conn->rx.rcrd.record_left);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_qx_ping(void) {
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  int rv;
+  size_t i;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.qx_ping = (dwnx_frame_qx_ping){
+    .type = DWNX_FRAME_QX_PING_REQUEST,
+  };
+
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_int64(0, ==, conn->rx.ping.last_seq);
+
+  fr.qx_ping = (dwnx_frame_qx_ping){
+    .type = DWNX_FRAME_QX_PING_REQUEST,
+    .seq = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_int64(1000000007, ==, conn->rx.ping.last_seq);
+
+  /* Receiving same sequence number is treated as error */
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.qx_ping = (dwnx_frame_qx_ping){
+    .type = DWNX_FRAME_QX_PING_REQUEST,
+    .seq = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  for (i = 0; i < dwnx_buf_len(&buf) - 1; ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+    assert_int64(-1, ==, conn->rx.ping.last_seq);
+  }
+
+  rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_int64(1000000007, ==, conn->rx.ping.last_seq);
 
   dwnx_conn_del(conn);
 }

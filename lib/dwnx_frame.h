@@ -32,6 +32,8 @@
 #include <dwnx/dwnx.h>
 
 #define DWNX_FRAME_QX_TRANSPORT_PARAMETERS 0x3F5153300D0A0D0AULL
+#define DWNX_FRAME_QX_PING_REQUEST 0x348C67529EF8C7BDULL
+#define DWNX_FRAME_QX_PING_RESPONSE 0x348C67529EF8C7BEULL
 
 #define DWNX_FRAME_PADDING 0x00ULL
 #define DWNX_FRAME_RESET_STREAM 0x04ULL
@@ -61,6 +63,11 @@ typedef struct dwnx_frame_qx_transport_parameters {
   uint64_t type;
   dwnx_transport_params *params;
 } dwnx_frame_qx_transport_parameters;
+
+typedef struct dwnx_frame_qx_ping {
+  uint64_t type;
+  uint64_t seq;
+} dwnx_frame_qx_ping;
 
 typedef struct dwnx_frame_padding {
   uint64_t type;
@@ -138,6 +145,7 @@ typedef struct dwnx_frame_connection_close {
 typedef union dwnx_frame {
   dwnx_frame_hd hd;
   dwnx_frame_qx_transport_parameters qx_transport_parameters;
+  dwnx_frame_qx_ping qx_ping;
   dwnx_frame_padding padding;
   dwnx_frame_stream stream;
   dwnx_frame_reset_stream reset_stream;

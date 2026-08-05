@@ -50,6 +50,12 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
     dwnx_put_uvarintw(p, (size_t)nwrite, 2);
 
     return;
+  case DWNX_FRAME_QX_PING_REQUEST:
+  case DWNX_FRAME_QX_PING_RESPONSE:
+    dest->last = dwnx_put_uvarint(dest->last, fr->qx_ping.type);
+    dest->last = dwnx_put_uvarint(dest->last, fr->qx_ping.seq);
+
+    return;
   case DWNX_FRAME_PADDING:
     memset(dest->last, 0, fr->padding.len);
     dest->last += fr->padding.len;

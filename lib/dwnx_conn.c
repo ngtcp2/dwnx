@@ -262,6 +262,7 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   /* Apply flow control limits */
   conn->rx.window = conn->rx.unsent_max_offset = conn->rx.max_offset =
     params->initial_max_data;
+  conn->rx.ping.last_seq = -1;
   conn->rx.bidi.unsent_max_streams = params->initial_max_streams_bidi;
   conn->rx.bidi.max_streams = params->initial_max_streams_bidi;
   conn->rx.uni.unsent_max_streams = params->initial_max_streams_uni;
@@ -409,6 +410,24 @@ static int conn_stop_sending(dwnx_conn *conn, dwnx_strm *strm,
   strm->cycle = dwnx_conn_tx_strmq_first_cycle(conn);
 
   return dwnx_conn_tx_strmq_push(conn, strm);
+}
+
+static int conn_recv_qx_ping(dwnx_conn *conn, const dwnx_frame_qx_ping *fr,
+                             dwnx_tstamp ts) {
+  (void)ts;
+
+  if (fr->type == DWNX_FRAME_QX_PING_RESPONSE) {
+    /* TODO: Process response */
+    return 0;
+  }
+
+  if (conn->rx.ping.last_seq >= (int64_t)fr->seq) {
+    return DWNX_ERR_PROTO;
+  }
+
+  conn->rx.ping.last_seq = (int64_t)fr->seq;
+
+  return 0;
 }
 
 static int conn_recv_stream(dwnx_conn *conn, const dwnx_frame_stream *fr,
@@ -908,6 +927,17 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         rcrd->state = DWNX_RECORD_READ_STATE_QX_TRANSPORT_PARAMETERS_LEN;
 
         break;
+      case DWNX_FRAME_QX_PING_REQUEST:
+      case DWNX_FRAME_QX_PING_RESPONSE:
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.qx_ping.type = vint;
+
+        rcrd->state = DWNX_RECORD_READ_STATE_QX_PING_SEQ;
+
+        break;
       case DWNX_FRAME_PADDING:
         for (; p != end && rcrd->record_left && *p == DWNX_FRAME_PADDING;
              ++p, --rcrd->record_left)
@@ -1099,6 +1129,29 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       rv = dwnx_conn_recv_transport_params(conn, rcrd->buf.pos,
                                            dwnx_buf_len(&rcrd->buf));
+      if (rv != 0) {
+        return rv;
+      }
+
+      goto frame_done;
+    case DWNX_RECORD_READ_STATE_QX_PING_SEQ:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.qx_ping.seq = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      rv = conn_recv_qx_ping(conn, &rcrd->fr.qx_ping, ts);
       if (rv != 0) {
         return rv;
       }

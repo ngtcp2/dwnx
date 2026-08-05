@@ -78,6 +78,12 @@ struct dwnx_conn {
     uint64_t window;
 
     struct {
+      /* last_seq is the last sequence number in QX_PING frame
+         received so far.  It is initialized as -1. */
+      int64_t last_seq;
+    } ping;
+
+    struct {
       /* unsent_max_streams is the maximum number of streams of peer
          initiated bidirectional stream which the local endpoint can
          accept.  This limit is not yet notified to the remote

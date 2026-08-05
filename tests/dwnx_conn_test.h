@@ -50,5 +50,6 @@ munit_void_test_decl(test_dwnx_conn_recv_streams_blocked_uni)
 munit_void_test_decl(test_dwnx_conn_recv_connection_close)
 munit_void_test_decl(test_dwnx_conn_recv_connection_close_app)
 munit_void_test_decl(test_dwnx_conn_recv_padding)
+munit_void_test_decl(test_dwnx_conn_recv_qx_ping)
 
 #endif /* !defined(DWNX_CONN_TEST_H) */
