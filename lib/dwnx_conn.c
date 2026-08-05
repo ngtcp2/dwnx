@@ -979,6 +979,17 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         rcrd->state = DWNX_RECORD_READ_STATE_STREAM_DATA_BLOCKED_STREAM_ID;
 
         break;
+      case DWNX_FRAME_STREAMS_BLOCKED_BIDI:
+      case DWNX_FRAME_STREAMS_BLOCKED_UNI:
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.streams_blocked.type = vint;
+
+        rcrd->state = DWNX_RECORD_READ_STATE_STREAMS_BLOCKED_MAX_STREAMS;
+
+        break;
       default:
         if ((vint & ~(DWNX_FRAME_STREAM - 1)) == DWNX_FRAME_STREAM) {
           if (rcrd->record_left == 0) {
@@ -1538,6 +1549,26 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       dwnx_varint_reader_reset(vird);
 
       /* TODO: Process STREAM_DATA_BLOCKED */
+
+      goto frame_done;
+    case DWNX_RECORD_READ_STATE_STREAMS_BLOCKED_MAX_STREAMS:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.streams_blocked.max_streams = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      /* TODO: Process STREAMS_BLOCKED */
 
       goto frame_done;
     default:
