@@ -172,6 +172,40 @@ static int conn_call_extend_max_stream_data(dwnx_conn *conn, dwnx_strm *strm,
   return 0;
 }
 
+static int conn_call_extend_max_local_streams_bidi(dwnx_conn *conn,
+                                                   uint64_t max_streams) {
+  int rv;
+
+  if (!conn->callbacks.extend_max_local_streams_bidi) {
+    return 0;
+  }
+
+  rv = conn->callbacks.extend_max_local_streams_bidi(conn, max_streams,
+                                                     conn->user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
+static int conn_call_extend_max_local_streams_uni(dwnx_conn *conn,
+                                                  uint64_t max_streams) {
+  int rv;
+
+  if (!conn->callbacks.extend_max_local_streams_uni) {
+    return 0;
+  }
+
+  rv = conn->callbacks.extend_max_local_streams_uni(conn, max_streams,
+                                                    conn->user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
 static int cycle_less(const dwnx_pq_entry *lhs, const dwnx_pq_entry *rhs) {
   dwnx_strm *ls = dwnx_struct_of(lhs, dwnx_strm, pe);
   dwnx_strm *rs = dwnx_struct_of(rhs, dwnx_strm, pe);
@@ -755,6 +789,34 @@ static int conn_recv_max_stream_data(dwnx_conn *conn,
                                           fr->max_stream_data);
 }
 
+static int conn_recv_max_streams(dwnx_conn *conn,
+                                 const dwnx_frame_max_streams *fr,
+                                 dwnx_tstamp ts) {
+  (void)ts;
+
+  if (fr->max_streams > DWNX_MAX_STREAMS) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  if (fr->type == DWNX_FRAME_MAX_STREAMS_BIDI) {
+    if (conn->tx.bidi.max_streams >= fr->max_streams) {
+      return DWNX_ERR_PROTO;
+    }
+
+    conn->tx.bidi.max_streams = fr->max_streams;
+
+    return conn_call_extend_max_local_streams_bidi(conn, fr->max_streams);
+  }
+
+  if (conn->tx.uni.max_streams >= fr->max_streams) {
+    return DWNX_ERR_PROTO;
+  }
+
+  conn->tx.uni.max_streams = fr->max_streams;
+
+  return conn_call_extend_max_local_streams_uni(conn, fr->max_streams);
+}
+
 int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
                    dwnx_tstamp ts) {
   const uint8_t *p, *end;
@@ -884,6 +946,17 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         rcrd->fr.max_stream_data.type = DWNX_FRAME_MAX_STREAM_DATA;
 
         rcrd->state = DWNX_RECORD_READ_STATE_MAX_STREAM_DATA_STREAM_ID;
+
+        break;
+      case DWNX_FRAME_MAX_STREAMS_BIDI:
+      case DWNX_FRAME_MAX_STREAMS_UNI:
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.max_streams.type = vint;
+
+        rcrd->state = DWNX_RECORD_READ_STATE_MAX_STREAMS_MAX_STREAMS;
 
         break;
       default:
@@ -1351,6 +1424,29 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       dwnx_varint_reader_reset(vird);
 
       rv = conn_recv_max_stream_data(conn, &rcrd->fr.max_stream_data, ts);
+      if (rv != 0) {
+        return rv;
+      }
+
+      goto frame_done;
+    case DWNX_RECORD_READ_STATE_MAX_STREAMS_MAX_STREAMS:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      rcrd->fr.max_streams.max_streams = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      rv = conn_recv_max_streams(conn, &rcrd->fr.max_streams, ts);
       if (rv != 0) {
         return rv;
       }

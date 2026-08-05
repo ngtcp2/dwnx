@@ -41,5 +41,7 @@ munit_void_test_decl(test_dwnx_conn_recv_reset_stream)
 munit_void_test_decl(test_dwnx_conn_recv_stop_sending)
 munit_void_test_decl(test_dwnx_conn_recv_max_data)
 munit_void_test_decl(test_dwnx_conn_recv_max_stream_data)
+munit_void_test_decl(test_dwnx_conn_recv_max_streams_bidi)
+munit_void_test_decl(test_dwnx_conn_recv_max_streams_uni)
 
 #endif /* !defined(DWNX_CONN_TEST_H) */

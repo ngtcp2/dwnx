@@ -68,6 +68,7 @@ typedef enum dwnx_record_read_state {
   DWNX_RECORD_READ_STATE_MAX_DATA_MAX_DATA,
   DWNX_RECORD_READ_STATE_MAX_STREAM_DATA_STREAM_ID,
   DWNX_RECORD_READ_STATE_MAX_STREAM_DATA_MAX_STREAM_DATA,
+  DWNX_RECORD_READ_STATE_MAX_STREAMS_MAX_STREAMS,
 } dwnx_record_read_state;
 
 typedef struct dwnx_record_reader {

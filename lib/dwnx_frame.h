@@ -98,6 +98,11 @@ typedef struct dwnx_frame_max_stream_data {
   uint64_t max_stream_data;
 } dwnx_frame_max_stream_data;
 
+typedef struct dwnx_frame_max_streams {
+  uint64_t type;
+  uint64_t max_streams;
+} dwnx_frame_max_streams;
+
 typedef union dwnx_frame {
   dwnx_frame_hd hd;
   dwnx_frame_qx_transport_parameters qx_transport_parameters;
@@ -106,6 +111,7 @@ typedef union dwnx_frame {
   dwnx_frame_stop_sending stop_sending;
   dwnx_frame_max_data max_data;
   dwnx_frame_max_stream_data max_stream_data;
+  dwnx_frame_max_streams max_streams;
 } dwnx_frame;
 
 #endif /* !defined(DWNX_FRAME_H) */

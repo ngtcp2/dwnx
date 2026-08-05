@@ -102,6 +102,12 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
       dwnx_put_uvarint(dest->last, fr->max_stream_data.max_stream_data);
 
     return;
+  case DWNX_FRAME_MAX_STREAMS_BIDI:
+  case DWNX_FRAME_MAX_STREAMS_UNI:
+    dest->last = dwnx_put_uvarint(dest->last, fr->max_streams.type);
+    dest->last = dwnx_put_uvarint(dest->last, fr->max_streams.max_streams);
+
+    return;
   default:
     dwnx_unreachable();
   }

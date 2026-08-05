@@ -39,6 +39,8 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_stop_sending),
   munit_void_test(test_dwnx_conn_recv_max_data),
   munit_void_test(test_dwnx_conn_recv_max_stream_data),
+  munit_void_test(test_dwnx_conn_recv_max_streams_bidi),
+  munit_void_test(test_dwnx_conn_recv_max_streams_uni),
   munit_test_end(),
 };
 
@@ -75,6 +77,14 @@ typedef struct userdata {
     int64_t stream_id;
     uint64_t max_data;
   } extend_max_stream_data;
+  struct {
+    size_t ncalled;
+    uint64_t max_streams;
+  } extend_max_local_streams_bidi;
+  struct {
+    size_t ncalled;
+    uint64_t max_streams;
+  } extend_max_local_streams_uni;
 } userdata;
 
 typedef struct conn_options {
@@ -159,6 +169,28 @@ static int extend_max_stream_data(dwnx_conn *conn, int64_t stream_id,
   ++ud->extend_max_stream_data.ncalled;
   ud->extend_max_stream_data.stream_id = stream_id;
   ud->extend_max_stream_data.max_data = max_data;
+
+  return 0;
+}
+
+static int extend_max_local_streams_bidi(dwnx_conn *conn, uint64_t max_streams,
+                                         void *user_data) {
+  userdata *ud = user_data;
+  (void)conn;
+
+  ++ud->extend_max_local_streams_bidi.ncalled;
+  ud->extend_max_local_streams_bidi.max_streams = max_streams;
+
+  return 0;
+}
+
+static int extend_max_local_streams_uni(dwnx_conn *conn, uint64_t max_streams,
+                                        void *user_data) {
+  userdata *ud = user_data;
+  (void)conn;
+
+  ++ud->extend_max_local_streams_uni.ncalled;
+  ud->extend_max_local_streams_uni.max_streams = max_streams;
 
   return 0;
 }
@@ -901,6 +933,168 @@ void test_dwnx_conn_recv_max_stream_data(void) {
 
   assert_not_null(strm);
   assert_uint64(1000000007, ==, strm->tx.max_offset);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_max_streams_bidi(void) {
+  static const dwnx_callbacks callbacks = {
+    .extend_max_local_streams_bidi = extend_max_local_streams_bidi,
+  };
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  conn_options opts;
+  userdata ud;
+  size_t i;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.max_streams = (dwnx_frame_max_streams){
+    .type = DWNX_FRAME_MAX_STREAMS_BIDI,
+    .max_streams = 1000000007,
+  };
+
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.extend_max_local_streams_bidi.ncalled);
+  assert_uint64(1000000007, ==, ud.extend_max_local_streams_bidi.max_streams);
+  assert_uint64(1000000007, ==, conn->tx.bidi.max_streams);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.max_streams = (dwnx_frame_max_streams){
+    .type = DWNX_FRAME_MAX_STREAMS_BIDI,
+    .max_streams = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+
+  for (i = 0; i < dwnx_buf_len(&buf) - 1; ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+    assert_size(0, ==, ud.extend_max_local_streams_bidi.ncalled);
+  }
+
+  rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.extend_max_local_streams_bidi.ncalled);
+  assert_uint64(1000000007, ==, ud.extend_max_local_streams_bidi.max_streams);
+  assert_uint64(1000000007, ==, conn->tx.bidi.max_streams);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_recv_max_streams_uni(void) {
+  static const dwnx_callbacks callbacks = {
+    .extend_max_local_streams_uni = extend_max_local_streams_uni,
+  };
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  conn_options opts;
+  userdata ud;
+  size_t i;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.max_streams = (dwnx_frame_max_streams){
+    .type = DWNX_FRAME_MAX_STREAMS_UNI,
+    .max_streams = 1000000007,
+  };
+
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.extend_max_local_streams_uni.ncalled);
+  assert_uint64(1000000007, ==, ud.extend_max_local_streams_uni.max_streams);
+  assert_uint64(1000000007, ==, conn->tx.uni.max_streams);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.max_streams = (dwnx_frame_max_streams){
+    .type = DWNX_FRAME_MAX_STREAMS_UNI,
+    .max_streams = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+
+  for (i = 0; i < dwnx_buf_len(&buf) - 1; ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+    assert_size(0, ==, ud.extend_max_local_streams_uni.ncalled);
+  }
+
+  rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.extend_max_local_streams_uni.ncalled);
+  assert_uint64(1000000007, ==, ud.extend_max_local_streams_uni.max_streams);
+  assert_uint64(1000000007, ==, conn->tx.uni.max_streams);
 
   dwnx_conn_del(conn);
 }

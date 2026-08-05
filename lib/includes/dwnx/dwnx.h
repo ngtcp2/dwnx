@@ -787,6 +787,21 @@ typedef int (*dwnx_extend_max_stream_data)(dwnx_conn *conn, int64_t stream_id,
                                            uint64_t max_data, void *user_data,
                                            void *stream_user_data);
 
+/**
+ * @functypedef
+ *
+ * :type:`dwnx_extend_max_streams` is a callback function which is
+ * called every time max stream ID is strictly extended.
+ * |max_streams| is the cumulative number of streams which an endpoint
+ * can open.
+ *
+ * The callback function must return 0 if it succeeds.  Returning
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library call return
+ * immediately.
+ */
+typedef int (*dwnx_extend_max_streams)(dwnx_conn *conn, uint64_t max_streams,
+                                       void *user_data);
+
 typedef struct dwnx_callbacks {
   /**
    * :member:`recv_stream_data` is a callback function which is
@@ -824,6 +839,20 @@ typedef struct dwnx_callbacks {
    * optional.
    */
   dwnx_extend_max_stream_data extend_max_stream_data;
+  /**
+   * :member:`extend_max_local_streams_bidi` is a callback function
+   * which is invoked when the number of bidirectional stream which a
+   * local endpoint can open is increased.  This callback function is
+   * optional.
+   */
+  dwnx_extend_max_streams extend_max_local_streams_bidi;
+  /**
+   * :member:`extend_max_local_streams_uni` is a callback function
+   * which is invoked when the number of unidirectional stream which a
+   * local endpoint can open is increased.  This callback function is
+   * optional.
+   */
+  dwnx_extend_max_streams extend_max_local_streams_uni;
 } dwnx_callbacks;
 
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
