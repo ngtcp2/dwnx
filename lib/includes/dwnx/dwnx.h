@@ -882,6 +882,42 @@ DWNX_EXTERN void dwnx_conn_extend_max_offset(dwnx_conn *conn, uint64_t datalen);
 /**
  * @function
  *
+ * `dwnx_conn_open_bidi_stream` opens new bidirectional stream.  The
+ * |stream_user_data| is the user data specific to the stream.  The
+ * stream ID of the opened stream is stored in |*pstream_id|.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory
+ * :macro:`DWNX_ERR_STREAM_ID_BLOCKED`
+ *     The remote endpoint does not allow |stream_id| yet.
+ */
+DWNX_EXTERN int dwnx_conn_open_bidi_stream(dwnx_conn *conn, int64_t *pstream_id,
+                                           void *stream_user_data);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_open_uni_stream` opens new unidirectional stream.  The
+ * |stream_user_data| is the user data specific to the stream.  The
+ * stream ID of the opened stream is stored in |*pstream_id|.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory
+ * :macro:`DWNX_ERR_STREAM_ID_BLOCKED`
+ *     The remote endpoint does not allow |stream_id| yet.
+ */
+DWNX_EXTERN int dwnx_conn_open_uni_stream(dwnx_conn *conn, int64_t *pstream_id,
+                                          void *stream_user_data);
+
+/**
+ * @function
+ *
  * `dwnx_conn_shutdown_stream` closes a stream denoted by |stream_id|
  * abruptly.  |app_error_code| is one of application error codes, and
  * indicates the reason of shutdown.  Successful call of this function
@@ -962,6 +998,24 @@ DWNX_EXTERN int dwnx_conn_shutdown_stream_write(dwnx_conn *conn, uint32_t flags,
 DWNX_EXTERN int dwnx_conn_shutdown_stream_read(dwnx_conn *conn, uint32_t flags,
                                                int64_t stream_id,
                                                uint64_t app_error_code);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_get_streams_bidi_left` returns the number of
+ * bidirectional streams which the local endpoint can open without
+ * violating stream concurrency limit.
+ */
+DWNX_EXTERN uint64_t dwnx_conn_get_streams_bidi_left(const dwnx_conn *conn);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_get_streams_uni_left` returns the number of
+ * unidirectional streams which the local endpoint can open without
+ * violating stream concurrency limit.
+ */
+DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
 
 /**
  * @function

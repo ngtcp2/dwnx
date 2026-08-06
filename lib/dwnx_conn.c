@@ -2005,3 +2005,57 @@ int dwnx_conn_shutdown_stream_read(dwnx_conn *conn, uint32_t flags,
 
   return conn_shutdown_stream_read(conn, strm, app_error_code);
 }
+
+int dwnx_conn_open_bidi_stream(dwnx_conn *conn, int64_t *pstream_id,
+                               void *stream_user_data) {
+  int rv;
+  dwnx_strm *strm;
+
+  if (dwnx_conn_get_streams_bidi_left(conn) == 0) {
+    return DWNX_ERR_STREAM_ID_BLOCKED;
+  }
+
+  rv = dwnx_conn_create_stream(conn, &strm, conn->tx.bidi.next_stream_id,
+                               stream_user_data);
+  if (rv != 0) {
+    return rv;
+  }
+
+  *pstream_id = conn->tx.bidi.next_stream_id;
+  conn->tx.bidi.next_stream_id += 4;
+
+  return 0;
+}
+
+int dwnx_conn_open_uni_stream(dwnx_conn *conn, int64_t *pstream_id,
+                              void *stream_user_data) {
+  int rv;
+  dwnx_strm *strm;
+
+  if (dwnx_conn_get_streams_uni_left(conn) == 0) {
+    return DWNX_ERR_STREAM_ID_BLOCKED;
+  }
+
+  rv = dwnx_conn_create_stream(conn, &strm, conn->tx.uni.next_stream_id,
+                               stream_user_data);
+  if (rv != 0) {
+    return rv;
+  }
+
+  *pstream_id = conn->tx.uni.next_stream_id;
+  conn->tx.uni.next_stream_id += 4;
+
+  return 0;
+}
+
+uint64_t dwnx_conn_get_streams_bidi_left(const dwnx_conn *conn) {
+  uint64_t n = dwnx_ord_stream_id(conn->tx.bidi.next_stream_id);
+
+  return n > conn->tx.bidi.max_streams ? 0 : conn->tx.bidi.max_streams - n + 1;
+}
+
+uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn) {
+  uint64_t n = dwnx_ord_stream_id(conn->tx.uni.next_stream_id);
+
+  return n > conn->tx.uni.max_streams ? 0 : conn->tx.uni.max_streams - n + 1;
+}
