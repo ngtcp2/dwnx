@@ -140,9 +140,6 @@ struct dwnx_conn {
   int server;
 };
 
-int dwnx_conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
-                                    size_t datalen);
-
 /*
  * dwnx_conn_find_stream returns a stream whose stream ID is
  * |stream_id|.  If no such stream is found, it returns NULL.

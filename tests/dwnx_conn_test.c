@@ -49,6 +49,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_connection_close_app),
   munit_void_test(test_dwnx_conn_recv_padding),
   munit_void_test(test_dwnx_conn_recv_qx_ping),
+  munit_void_test(test_dwnx_conn_extend_max_stream_offset),
   munit_test_end(),
 };
 
@@ -1558,6 +1559,85 @@ void test_dwnx_conn_recv_qx_ping(void) {
               conn->rx.rcrd.state);
   assert_size(0, ==, conn->rx.rcrd.record_left);
   assert_int64(1000000007, ==, conn->rx.ping.last_seq);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_extend_max_stream_offset(void) {
+  static const dwnx_transport_params remote_params = {
+    .initial_max_streams_bidi = 1,
+    .initial_max_streams_uni = 1,
+    .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
+  };
+  static const dwnx_frame_qx_transport_parameters params_fr = {
+    .type = DWNX_FRAME_QX_TRANSPORT_PARAMETERS,
+    .params = &remote_params,
+  };
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_strm *strm;
+  dwnx_tstamp ts = 0;
+  int64_t stream_id;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  /* Extending the max stream offset of non-existent stream is
+     noop. */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  rv = dwnx_conn_extend_max_stream_offset(conn, 0, 1000000007);
+
+  assert_int(0, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Attempt to extend the max stream offset against local
+     unidirectional stream */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &params_fr, ++ts);
+
+  rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+  assert_int64(3, ==, stream_id);
+
+  rv = dwnx_conn_extend_max_stream_offset(conn, stream_id, 999);
+
+  assert_int(DWNX_ERR_INVALID_ARGUMENT, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Increase stream data limit */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &params_fr, ++ts);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+  assert_int64(1, ==, stream_id);
+
+  rv = dwnx_conn_extend_max_stream_offset(conn, stream_id, 999);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_uint64(65536 + 999, ==, strm->rx.unsent_max_offset);
+  assert_false(dwnx_strm_is_tx_queued(strm));
+
+  rv = dwnx_conn_extend_max_stream_offset(conn, stream_id, 15386);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_uint64(65536 + 999 + 15386, ==, strm->rx.unsent_max_offset);
+  assert_true(dwnx_strm_is_tx_queued(strm));
 
   dwnx_conn_del(conn);
 }

@@ -61,7 +61,7 @@ typedef struct dwnx_frame_hd {
 
 typedef struct dwnx_frame_qx_transport_parameters {
   uint64_t type;
-  dwnx_transport_params *params;
+  const dwnx_transport_params *params;
 } dwnx_frame_qx_transport_parameters;
 
 typedef struct dwnx_frame_qx_ping {

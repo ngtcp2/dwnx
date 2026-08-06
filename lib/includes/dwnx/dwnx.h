@@ -873,11 +873,62 @@ DWNX_EXTERN int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data,
 /**
  * @function
  *
+ * `dwnx_conn_extend_max_stream_offset` extends the maximum stream
+ * data that a remote endpoint can send by |datalen|.  |stream_id|
+ * specifies the stream ID.  This function only extends stream-level
+ * flow control window.
+ *
+ * This function returns 0 if a stream denoted by |stream_id| is not
+ * found.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory.
+ * :macro:`DWNX_ERR_INVALID_ARGUMENT`
+ *     |stream_id| refers to a local unidirectional stream.
+ */
+DWNX_EXTERN int dwnx_conn_extend_max_stream_offset(dwnx_conn *conn,
+                                                   int64_t stream_id,
+                                                   uint64_t datalen);
+
+/**
+ * @function
+ *
  * `dwnx_conn_extend_max_offset` extends max data offset by
  * |datalen|.  This function only extends connection-level flow
  * control window.
  */
 DWNX_EXTERN void dwnx_conn_extend_max_offset(dwnx_conn *conn, uint64_t datalen);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_extend_max_streams_bidi` extends the number of maximum
+ * remote bidirectional streams that a remote endpoint can open by
+ * |n|.
+ *
+ * The library does not increase maximum stream limit automatically.
+ * The exception is when a stream is closed without
+ * :member:`dwnx_callbacks.stream_open` callback being called.  In
+ * this case, stream limit is increased automatically.
+ */
+DWNX_EXTERN void dwnx_conn_extend_max_streams_bidi(dwnx_conn *conn, size_t n);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_extend_max_streams_uni` extends the number of maximum
+ * remote unidirectional streams that a remote endpoint can open by
+ * |n|.
+ *
+ * The library does not increase maximum stream limit automatically.
+ * The exception is when a stream is closed without
+ * :member:`dwnx_callbacks.stream_open` callback being called.  In
+ * this case, stream limit is increased automatically.
+ */
+DWNX_EXTERN void dwnx_conn_extend_max_streams_uni(dwnx_conn *conn, size_t n);
 
 /**
  * @function

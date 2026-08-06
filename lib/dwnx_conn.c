@@ -284,6 +284,8 @@ int dwnx_conn_server_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   }
 
   (*pconn)->server = 1;
+  (*pconn)->tx.bidi.next_stream_id = 1;
+  (*pconn)->tx.uni.next_stream_id = 3;
 
   return 0;
 }
@@ -291,7 +293,17 @@ int dwnx_conn_server_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
 int dwnx_conn_client_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
                          const dwnx_transport_params *params,
                          const dwnx_mem *mem, void *user_data) {
-  return conn_new(pconn, callbacks, params, mem, user_data);
+  int rv;
+
+  rv = conn_new(pconn, callbacks, params, mem, user_data);
+  if (rv != 0) {
+    return rv;
+  }
+
+  (*pconn)->tx.bidi.next_stream_id = 0;
+  (*pconn)->tx.uni.next_stream_id = 2;
+
+  return 0;
 }
 
 static int delete_strm(void *data, void *ptr) {
@@ -322,6 +334,16 @@ void dwnx_conn_del(dwnx_conn *conn) {
 }
 
 /*
+ * strm_should_send_max_stream_data returns nonzero if MAX_STREAM_DATA
+ * frame should be send for |strm|.
+ */
+static int strm_should_send_max_stream_data(const dwnx_strm *strm) {
+  uint64_t inc = strm->rx.unsent_max_offset - strm->rx.max_offset;
+
+  return strm->rx.window < 4 * inc;
+}
+
+/*
  * conn_max_data_violated returns nonzero if receiving |datalen|
  * violates connection flow control on local endpoint.
  */
@@ -329,14 +351,71 @@ static int conn_max_data_violated(const dwnx_conn *conn, uint64_t datalen) {
   return conn->rx.max_offset - conn->rx.offset < datalen;
 }
 
+int dwnx_conn_extend_max_stream_offset(dwnx_conn *conn, int64_t stream_id,
+                                       uint64_t datalen) {
+  dwnx_strm *strm;
+
+  if (!bidi_stream(stream_id) && conn_local_stream(conn, stream_id)) {
+    return DWNX_ERR_INVALID_ARGUMENT;
+  }
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+  if (!strm) {
+    return 0;
+  }
+
+  if (datalen > DWNX_MAX_VARINT ||
+      strm->rx.unsent_max_offset > DWNX_MAX_VARINT - datalen) {
+    strm->rx.unsent_max_offset = DWNX_MAX_VARINT;
+  } else {
+    strm->rx.unsent_max_offset += datalen;
+  }
+
+  if (!(strm->flags & (DWNX_STRM_FLAG_SHUT_RD | DWNX_STRM_FLAG_STOP_SENDING)) &&
+      !dwnx_strm_is_tx_queued(strm) && strm_should_send_max_stream_data(strm)) {
+    strm->cycle = dwnx_conn_tx_strmq_first_cycle(conn);
+
+    return dwnx_conn_tx_strmq_push(conn, strm);
+  }
+
+  return 0;
+}
+
 void dwnx_conn_extend_max_offset(dwnx_conn *conn, uint64_t datalen) {
   if (DWNX_MAX_VARINT < datalen ||
       conn->rx.unsent_max_offset > DWNX_MAX_VARINT - datalen) {
     conn->rx.unsent_max_offset = DWNX_MAX_VARINT;
+
     return;
   }
 
   conn->rx.unsent_max_offset += datalen;
+}
+
+/*
+ * handle_max_remote_streams_extension extends
+ * |*punsent_max_remote_streams| by |n| if a condition allows it.
+ */
+static void
+handle_max_remote_streams_extension(uint64_t *punsent_max_remote_streams,
+                                    size_t n) {
+  if (
+#if SIZE_MAX == UINT64_MAX
+    DWNX_MAX_STREAMS < n ||
+#endif /* SIZE_MAX == UINT64_MAX */
+    *punsent_max_remote_streams > (uint64_t)(DWNX_MAX_STREAMS - n)) {
+    *punsent_max_remote_streams = DWNX_MAX_STREAMS;
+  } else {
+    *punsent_max_remote_streams += n;
+  }
+}
+
+void dwnx_conn_extend_max_streams_bidi(dwnx_conn *conn, size_t n) {
+  handle_max_remote_streams_extension(&conn->rx.bidi.unsent_max_streams, n);
+}
+
+void dwnx_conn_extend_max_streams_uni(dwnx_conn *conn, size_t n) {
+  handle_max_remote_streams_extension(&conn->rx.uni.unsent_max_streams, n);
 }
 
 /*
@@ -410,6 +489,70 @@ static int conn_stop_sending(dwnx_conn *conn, dwnx_strm *strm,
   strm->cycle = dwnx_conn_tx_strmq_first_cycle(conn);
 
   return dwnx_conn_tx_strmq_push(conn, strm);
+}
+
+static int set_max_stream_offset(void *data, void *ptr) {
+  dwnx_strm *strm = data;
+  dwnx_conn *conn = ptr;
+  const dwnx_transport_params *remote_params = &conn->remote.transport_params;
+  uint64_t max_offset;
+  int rv;
+
+  if (!conn_local_stream(conn, strm->stream_id)) {
+    return 0;
+  }
+
+  if (bidi_stream(strm->stream_id)) {
+    max_offset = remote_params->initial_max_stream_data_bidi_remote;
+  } else {
+    max_offset = remote_params->initial_max_stream_data_uni;
+  }
+
+  if (strm->tx.max_offset < max_offset) {
+    strm->tx.max_offset = max_offset;
+
+    /* Don't call callback if stream is half-closed local */
+    if (strm->flags & DWNX_STRM_FLAG_SHUT_WR) {
+      return 0;
+    }
+
+    rv = conn_call_extend_max_stream_data(conn, strm, strm->stream_id,
+                                          strm->tx.max_offset);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
+  return 0;
+}
+
+static int conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
+                                      size_t datalen) {
+  int rv;
+  const dwnx_transport_params *remote_params;
+
+  rv =
+    dwnx_transport_params_decode(&conn->remote.transport_params, data, datalen);
+  if (rv != 0) {
+    return rv;
+  }
+
+  remote_params = &conn->remote.transport_params;
+
+  if (remote_params->max_record_size < DWNX_DEFAULT_MAX_RECORD_SIZE) {
+    return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
+  }
+
+  conn->tx.bidi.max_streams = remote_params->initial_max_streams_bidi;
+  conn->tx.uni.max_streams = remote_params->initial_max_streams_uni;
+  conn->tx.max_offset = remote_params->initial_max_data;
+
+  if (!conn->server) {
+    /* Increase max stream data for streams created in early data. */
+    dwnx_map_each(&conn->strms, set_max_stream_offset, conn);
+  }
+
+  return 0;
 }
 
 static int conn_recv_qx_ping(dwnx_conn *conn, const dwnx_frame_qx_ping *fr,
@@ -1075,7 +1218,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       dwnx_varint_reader_reset(vird);
 
       if (vint == 0) {
-        rv = dwnx_conn_recv_transport_params(conn, NULL, 0);
+        rv = conn_recv_transport_params(conn, NULL, 0);
         if (rv != 0) {
           return rv;
         }
@@ -1091,7 +1234,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       }
 
       if (p + vint <= end) {
-        rv = dwnx_conn_recv_transport_params(conn, p, vint);
+        rv = conn_recv_transport_params(conn, p, vint);
         if (rv != 0) {
           return rv;
         }
@@ -1127,8 +1270,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return 0;
       }
 
-      rv = dwnx_conn_recv_transport_params(conn, rcrd->buf.pos,
-                                           dwnx_buf_len(&rcrd->buf));
+      rv = conn_recv_transport_params(conn, rcrd->buf.pos,
+                                      dwnx_buf_len(&rcrd->buf));
       if (rv != 0) {
         return rv;
       }
@@ -1766,12 +1909,6 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
   }
 
   return 0;
-}
-
-int dwnx_conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
-                                    size_t datalen) {
-  return dwnx_transport_params_decode(&conn->remote.transport_params, data,
-                                      datalen);
 }
 
 dwnx_strm *dwnx_conn_find_stream(const dwnx_conn *conn, int64_t stream_id) {
