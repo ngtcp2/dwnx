@@ -22,29 +22,25 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+#ifndef DWNX_FRAME_TEST_H
+#define DWNX_FRAME_TEST_H
+
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
 #endif /* defined(HAVE_CONFIG_H) */
 
+#define MUNIT_ENABLE_ASSERT_ALIASES
+
 #include "munit.h"
 
-/* include test cases' include files here */
-#include "dwnx_transport_params_test.h"
-#include "dwnx_conn_test.h"
-#include "dwnx_frame_test.h"
+extern const MunitSuite frame_suite;
 
-int main(int argc, char *argv[]) {
-  const MunitSuite suites[] = {
-    transport_params_suite,
-    conn_suite,
-    frame_suite,
-    {0},
-  };
-  const MunitSuite suite = {
-    .prefix = "",
-    .suites = suites,
-    .iterations = 1,
-  };
+munit_void_test_decl(test_dwnx_frame_encode_qx_transport_parameters)
+munit_void_test_decl(test_dwnx_frame_encode_stream)
+munit_void_test_decl(test_dwnx_frame_encode_reset_stream)
+munit_void_test_decl(test_dwnx_frame_encode_stop_sending)
+munit_void_test_decl(test_dwnx_frame_encode_max_data)
+munit_void_test_decl(test_dwnx_frame_encode_max_stream_data)
+munit_void_test_decl(test_dwnx_frame_encode_max_streams)
 
-  return munit_suite_main(&suite, NULL, argc, argv);
-}
+#endif /* !defined(DWNX_FRAME_TEST_H) */

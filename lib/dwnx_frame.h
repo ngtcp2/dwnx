@@ -31,6 +31,8 @@
 
 #include <dwnx/dwnx.h>
 
+#include "dwnx_transport_params.h"
+
 #define DWNX_FRAME_QX_TRANSPORT_PARAMETERS 0x3F5153300D0A0D0AULL
 #define DWNX_FRAME_QX_PING_REQUEST 0x348C67529EF8C7BDULL
 #define DWNX_FRAME_QX_PING_RESPONSE 0x348C67529EF8C7BEULL
@@ -54,6 +56,10 @@
 #define DWNX_STREAM_FIN_BIT 0x01U
 #define DWNX_STREAM_LEN_BIT 0x02U
 #define DWNX_STREAM_OFF_BIT 0x04U
+
+/* DWNX_MAX_STREAM_DATACNT is the maximum number of dwnx_vec that a
+   dwnx_frame_stream can include. */
+#define DWNX_MAX_STREAM_DATACNT 256
 
 typedef struct dwnx_frame_hd {
   uint64_t type;
@@ -82,6 +88,11 @@ typedef struct dwnx_frame_stream {
   int64_t stream_id;
   uint64_t offset;
   size_t len;
+  /* data and datacnt is the stream data.  They are only used when
+     encoding the frame.  They should contain at least len bytes.
+     Only first len bytes are used. */
+  const dwnx_vec *data;
+  size_t datacnt;
 } dwnx_frame_stream;
 
 typedef struct dwnx_frame_reset_stream {
@@ -158,5 +169,100 @@ typedef union dwnx_frame {
   dwnx_frame_streams_blocked streams_blocked;
   dwnx_frame_connection_close connection_close;
 } dwnx_frame;
+
+dwnx_ssize dwnx_frame_encode(uint8_t *out, size_t outlen, const dwnx_frame *fr);
+
+/*
+ * dwnx_frame_encode_qx_transport_parameters encodes
+ * QX_TRANSPORT_PARAMETERS frame |fr| into the buffer pointed by |out|
+ * of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_qx_transport_parameters(
+  uint8_t *out, size_t outlen, const dwnx_frame_qx_transport_parameters *fr);
+
+/*
+ * dwnx_frame_encode_stream encodes STREAM frame |fr| into the buffer
+ * pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_stream(uint8_t *out, size_t outlen,
+                                    const dwnx_frame_stream *fr);
+
+/*
+ * dwnx_frame_encode_reset_stream encodes RESET_STREAM frame |fr| into
+ * the buffer pointed by |out| of length |buflen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_reset_stream(uint8_t *out, size_t outlen,
+                                          const dwnx_frame_reset_stream *fr);
+
+/*
+ * dwnx_frame_encode_stop_sending encodes STOP_SENDING frame |fr| into
+ * the buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_stop_sending(uint8_t *out, size_t outlen,
+                                          const dwnx_frame_stop_sending *fr);
+
+/*
+ * dwnx_frame_encode_max_data encodes MAX_DATA frame |fr| into the
+ * buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_max_data(uint8_t *out, size_t outlen,
+                                      const dwnx_frame_max_data *fr);
+
+/*
+ * dwnx_frame_encode_max_stream_data encodes MAX_STREAM_DATA frame
+ * |fr| into the buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize
+dwnx_frame_encode_max_stream_data(uint8_t *out, size_t outlen,
+                                  const dwnx_frame_max_stream_data *fr);
+
+/*
+ * dwnx_frame_encode_max_streams encodes MAX_STREAMS frame |fr| into
+ * the buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_max_streams(uint8_t *out, size_t outlen,
+                                         const dwnx_frame_max_streams *fr);
 
 #endif /* !defined(DWNX_FRAME_H) */

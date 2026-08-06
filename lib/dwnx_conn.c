@@ -206,6 +206,58 @@ static int conn_call_extend_max_local_streams_uni(dwnx_conn *conn,
   return 0;
 }
 
+static int conn_call_stream_stop_sending(dwnx_conn *conn, int64_t stream_id,
+                                         uint64_t app_error_code,
+                                         void *stream_user_data) {
+  int rv;
+
+  if (!conn->callbacks.stream_stop_sending) {
+    return 0;
+  }
+
+  rv = conn->callbacks.stream_stop_sending(conn, stream_id, app_error_code,
+                                           conn->user_data, stream_user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
+static int conn_call_extend_max_remote_streams_bidi(dwnx_conn *conn,
+                                                    uint64_t max_streams) {
+  int rv;
+
+  if (!conn->callbacks.extend_max_remote_streams_bidi) {
+    return 0;
+  }
+
+  rv = conn->callbacks.extend_max_remote_streams_bidi(conn, max_streams,
+                                                      conn->user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
+static int conn_call_extend_max_remote_streams_uni(dwnx_conn *conn,
+                                                   uint64_t max_streams) {
+  int rv;
+
+  if (!conn->callbacks.extend_max_remote_streams_uni) {
+    return 0;
+  }
+
+  rv = conn->callbacks.extend_max_remote_streams_uni(conn, max_streams,
+                                                     conn->user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
 static int cycle_less(const dwnx_pq_entry *lhs, const dwnx_pq_entry *rhs) {
   dwnx_strm *ls = dwnx_struct_of(lhs, dwnx_strm, pe);
   dwnx_strm *rs = dwnx_struct_of(rhs, dwnx_strm, pe);
@@ -258,6 +310,7 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   dwnx_idtr_init(&conn->bidi.idtr, mem);
   dwnx_idtr_init(&conn->uni.idtr, mem);
   dwnx_pq_init(&conn->tx.strmq, cycle_less, mem);
+  dwnx_qre_init(&conn->tx.qre);
 
   /* Apply flow control limits */
   conn->rx.window = conn->rx.unsent_max_offset = conn->rx.max_offset =
@@ -344,6 +397,16 @@ static int strm_should_send_max_stream_data(const dwnx_strm *strm) {
 }
 
 /*
+ * conn_should_send_max_data returns nonzero if MAX_DATA frame should
+ * be sent.
+ */
+static int conn_should_send_max_data(const dwnx_conn *conn) {
+  uint64_t inc = conn->rx.unsent_max_offset - conn->rx.max_offset;
+
+  return conn->rx.window < 4 * inc;
+}
+
+/*
  * conn_max_data_violated returns nonzero if receiving |datalen|
  * violates connection flow control on local endpoint.
  */
@@ -390,6 +453,27 @@ void dwnx_conn_extend_max_offset(dwnx_conn *conn, uint64_t datalen) {
   }
 
   conn->rx.unsent_max_offset += datalen;
+}
+
+/*
+ * conn_fc_credits returns the number of bytes allowed to be sent to
+ * the given stream.  Both connection and stream level flow control
+ * credits are considered.
+ */
+static uint64_t conn_fc_credits(const dwnx_conn *conn, const dwnx_strm *strm) {
+  return dwnx_min(strm->tx.max_offset - strm->tx.offset,
+                  conn->tx.max_offset - conn->tx.offset);
+}
+
+/*
+ * conn_enforce_flow_control returns the number of bytes allowed to be
+ * sent to the given stream.  |len| might be shorted because of
+ * available flow control credits.
+ */
+static uint64_t conn_enforce_flow_control(const dwnx_conn *conn,
+                                          const dwnx_strm *strm, uint64_t len) {
+  uint64_t fc_credits = conn_fc_credits(conn, strm);
+  return dwnx_min(len, fc_credits);
 }
 
 /*
@@ -1400,13 +1484,14 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return 0;
       }
 
-      rcrd->fr.stream.len = vird->acc;
+      vint = vird->acc;
       dwnx_varint_reader_reset(vird);
 
-      if (rcrd->fr.stream.len > rcrd->record_left) {
+      if (vint > rcrd->record_left) {
         return DWNX_ERR_FRAME_ENCODING;
       }
 
+      rcrd->fr.stream.len = vint;
       rcrd->field_left = rcrd->fr.stream.len;
 
       rv = conn_recv_stream(conn, &rcrd->fr.stream, ts);
@@ -2186,4 +2271,309 @@ uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn) {
   uint64_t n = dwnx_ord_stream_id(conn->tx.uni.next_stream_id);
 
   return n > conn->tx.uni.max_streams ? 0 : conn->tx.uni.max_streams - n + 1;
+}
+
+dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
+                                   size_t destlen, dwnx_ssize *pdatalen,
+                                   uint32_t flags, int64_t stream_id,
+                                   const dwnx_vec *datav, size_t datavcnt,
+                                   dwnx_tstamp ts) {
+  dwnx_vmsg vmsg, *pvmsg;
+  dwnx_strm *strm;
+  int64_t datalen;
+
+  if (pdatalen) {
+    *pdatalen = -1;
+  }
+
+  if (stream_id != -1) {
+    strm = dwnx_conn_find_stream(conn, stream_id);
+    if (!strm) {
+      return DWNX_ERR_STREAM_NOT_FOUND;
+    }
+
+    if (strm->flags & DWNX_STRM_FLAG_SHUT_WR) {
+      return DWNX_ERR_STREAM_SHUT_WR;
+    }
+
+    datalen = dwnx_vec_len_varint(datav, datavcnt);
+    if (datalen == -1) {
+      return DWNX_ERR_INVALID_ARGUMENT;
+    }
+
+    if (datalen == 0 && !(flags & DWNX_WRITE_STREAM_FLAG_FIN) &&
+        strm->tx.offset) {
+      pvmsg = NULL;
+    } else {
+      if ((uint64_t)datalen > DWNX_MAX_VARINT - strm->tx.offset ||
+          (uint64_t)datalen > DWNX_MAX_VARINT - conn->tx.offset) {
+        return DWNX_ERR_INVALID_ARGUMENT;
+      }
+
+      vmsg = (dwnx_vmsg){
+        .type = DWNX_VMSG_TYPE_STREAM,
+        .stream =
+          {
+            .strm = strm,
+            .data = datav,
+            .datacnt = datavcnt,
+            .pdatalen = pdatalen,
+            .flags = flags,
+          },
+      };
+
+      pvmsg = &vmsg;
+    }
+  } else {
+    pvmsg = NULL;
+  }
+
+  return dwnx_conn_write_vmsg(conn, dest, destlen, pvmsg, ts);
+}
+
+dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
+                                dwnx_vmsg *vmsg, dwnx_tstamp ts) {
+  int rv = 0;
+
+  if (destlen <= 2) {
+    return 0;
+  }
+
+  if (!dwnx_qre_has_started(&conn->tx.qre)) {
+    dwnx_qre_start(&conn->tx.qre, dest, destlen);
+
+    if (!(conn->flags & DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SENT)) {
+      rv = dwnx_conn_write_transport_params(conn, ts);
+      if (rv != 0) {
+        return rv;
+      }
+
+      conn->flags |= DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SENT;
+    }
+
+    rv = dwnx_conn_write_ctrl_frames(conn, ts);
+    if (rv < 0 && rv != DWNX_ERR_NOBUF) {
+      return rv;
+    }
+  }
+
+  if (rv != DWNX_ERR_NOBUF && vmsg) {
+    assert(vmsg->type == DWNX_VMSG_TYPE_STREAM);
+
+    rv = dwnx_conn_write_stream_frame(
+      conn, vmsg->stream.pdatalen, vmsg->stream.strm, vmsg->stream.flags,
+      vmsg->stream.data, vmsg->stream.datacnt, ts);
+    if (rv < 0 && rv != DWNX_ERR_NOBUF) {
+      return rv;
+    }
+  }
+
+  if (rv == 0) {
+    return DWNX_ERR_WRITE_MORE;
+  }
+
+  return (dwnx_ssize)dwnx_qre_final(&conn->tx.qre);
+}
+
+int dwnx_conn_write_transport_params(dwnx_conn *conn, dwnx_tstamp ts) {
+  (void)ts;
+
+  return dwnx_qre_encode_frame(&conn->tx.qre,
+                               &(dwnx_frame){
+                                 .qx_transport_parameters =
+                                   (dwnx_frame_qx_transport_parameters){
+                                     .type = DWNX_FRAME_QX_TRANSPORT_PARAMETERS,
+                                     .params = &conn->local.transport_params,
+                                   },
+                               });
+}
+
+int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts) {
+  dwnx_qre *qre = &conn->tx.qre;
+  dwnx_strm *strm;
+  dwnx_frame fr;
+  int rv;
+  (void)ts;
+
+  if (conn_should_send_max_data(conn)) {
+    fr.max_data = (dwnx_frame_max_data){
+      .type = DWNX_FRAME_MAX_DATA,
+      .max_data = conn->rx.unsent_max_offset,
+    };
+
+    rv = dwnx_qre_encode_frame(qre, &fr);
+    if (rv != 0) {
+      return rv;
+    }
+
+    conn->rx.max_offset = conn->rx.unsent_max_offset;
+  }
+
+  for (; !dwnx_pq_empty(&conn->tx.strmq);) {
+    strm = dwnx_conn_tx_strmq_top(conn);
+
+    if (strm->flags & DWNX_STRM_FLAG_SEND_RESET_STREAM) {
+      fr.reset_stream = (dwnx_frame_reset_stream){
+        .type = DWNX_FRAME_RESET_STREAM,
+        .stream_id = strm->stream_id,
+        .app_error_code = strm->tx.reset_stream_app_error_code,
+        .final_size = strm->tx.offset,
+      };
+
+      rv = dwnx_qre_encode_frame(qre, &fr);
+      if (rv != 0) {
+        return rv;
+      }
+
+      strm->flags &= ~DWNX_STRM_FLAG_SEND_RESET_STREAM;
+    }
+
+    if (strm->flags & DWNX_STRM_FLAG_SEND_STOP_SENDING) {
+      if (strm->flags & DWNX_STRM_FLAG_SHUT_RD) {
+        strm->flags &= ~DWNX_STRM_FLAG_SEND_STOP_SENDING;
+      } else {
+        rv = conn_call_stream_stop_sending(conn, strm->stream_id,
+                                           strm->tx.stop_sending_app_error_code,
+                                           strm->stream_user_data);
+        if (rv != 0) {
+          assert(dwnx_err_is_fatal(rv));
+
+          return rv;
+        }
+
+        fr.stop_sending = (dwnx_frame_stop_sending){
+          .type = DWNX_FRAME_STOP_SENDING,
+          .stream_id = strm->stream_id,
+          .app_error_code = strm->tx.stop_sending_app_error_code,
+        };
+
+        rv = dwnx_qre_encode_frame(qre, &fr);
+        if (rv != 0) {
+          return rv;
+        }
+
+        strm->flags &= ~DWNX_STRM_FLAG_SEND_STOP_SENDING;
+      }
+    }
+
+    if (!(strm->flags &
+          (DWNX_STRM_FLAG_SHUT_RD | DWNX_STRM_FLAG_STOP_SENDING)) &&
+        strm_should_send_max_stream_data(strm)) {
+      fr.max_stream_data = (dwnx_frame_max_stream_data){
+        .type = DWNX_FRAME_MAX_STREAM_DATA,
+        .stream_id = strm->stream_id,
+        .max_stream_data = strm->rx.unsent_max_offset,
+      };
+
+      rv = dwnx_qre_encode_frame(qre, &fr);
+      if (rv != 0) {
+        return rv;
+      }
+
+      strm->rx.max_offset = strm->rx.unsent_max_offset;
+    }
+
+    dwnx_conn_tx_strmq_pop(conn);
+  }
+
+  if (conn->rx.bidi.unsent_max_streams > conn->rx.bidi.max_streams) {
+    rv = conn_call_extend_max_remote_streams_bidi(
+      conn, conn->rx.bidi.unsent_max_streams);
+    if (rv != 0) {
+      assert(dwnx_err_is_fatal(rv));
+
+      return rv;
+    }
+
+    fr.max_streams = (dwnx_frame_max_streams){
+      .type = DWNX_FRAME_MAX_STREAMS_BIDI,
+      .max_streams = conn->rx.bidi.unsent_max_streams,
+    };
+
+    rv = dwnx_qre_encode_frame(qre, &fr);
+    if (rv != 0) {
+      return rv;
+    }
+
+    conn->rx.bidi.max_streams = conn->rx.bidi.unsent_max_streams;
+  }
+
+  if (conn->rx.uni.unsent_max_streams > conn->rx.uni.max_streams) {
+    rv = conn_call_extend_max_remote_streams_uni(
+      conn, conn->rx.uni.unsent_max_streams);
+    if (rv != 0) {
+      assert(dwnx_err_is_fatal(rv));
+
+      return rv;
+    }
+
+    fr.max_streams = (dwnx_frame_max_streams){
+      .type = DWNX_FRAME_MAX_STREAMS_UNI,
+      .max_streams = conn->rx.uni.unsent_max_streams,
+    };
+
+    rv = dwnx_qre_encode_frame(qre, &fr);
+    if (rv != 0) {
+      return rv;
+    }
+
+    conn->rx.uni.max_streams = conn->rx.uni.unsent_max_streams;
+  }
+
+  return 0;
+}
+
+int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
+                                 dwnx_strm *strm, uint32_t flags,
+                                 const dwnx_vec *datav, size_t datavcnt,
+                                 dwnx_tstamp ts) {
+  dwnx_qre *qre = &conn->tx.qre;
+  dwnx_ssize wdatalen;
+  dwnx_frame fr;
+  uint64_t datalen, ndatalen;
+  int rv;
+  (void)ts;
+
+  datalen = dwnx_vec_len(datav, datavcnt);
+  ndatalen = conn_enforce_flow_control(conn, strm, datalen);
+
+  /* 0 length STREAM frame is allowed */
+  if (ndatalen == 0 && datalen) {
+    return DWNX_ERR_STREAM_DATA_BLOCKED;
+  }
+
+  wdatalen = dwnx_qre_stream_max_datalen(qre, strm->stream_id, strm->tx.offset,
+                                         ndatalen);
+  if (wdatalen == -1 || (wdatalen == 0 && datalen != 0)) {
+    return DWNX_ERR_NOBUF;
+  }
+
+  fr.stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .stream_id = strm->stream_id,
+    .fin =
+      (flags & DWNX_WRITE_STREAM_FLAG_FIN) && datalen == (uint64_t)wdatalen,
+    .offset = strm->tx.offset,
+    .len = (size_t)wdatalen,
+    .data = datav,
+    .datacnt = datavcnt,
+  };
+
+  rv = dwnx_qre_encode_frame(qre, &fr);
+  if (rv != 0) {
+    return rv;
+  }
+
+  strm->tx.offset += (uint64_t)wdatalen;
+  conn->tx.offset += (uint64_t)wdatalen;
+
+  if (fr.stream.fin) {
+    dwnx_strm_shutdown(strm, DWNX_STRM_FLAG_SHUT_WR);
+  }
+
+  if (pdatalen) {
+    *pdatalen = wdatalen;
+  }
+
+  return 0;
 }

@@ -25,17 +25,19 @@ EXTRA_DIST = munit/COPYING munit/munitxx.h
 check_PROGRAMS = main
 
 OBJECTS = \
-	main.c \
-	munit/munit.c \
+	dwnx_conn_test.c \
+	dwnx_frame_test.c \
 	dwnx_test_helper.c \
 	dwnx_transport_params_test.c \
-	dwnx_conn_test.c
+	main.c \
+	munit/munit.c
 
 HFILES = \
-	munit/munit.h \
+	dwnx_conn_test.h \
+	dwnx_frame_test.h \
 	dwnx_test_helper.h \
 	dwnx_transport_params_test.h \
-	dwnx_conn_test.h
+	munit/munit.h
 
 main_SOURCES = $(HFILES) $(OBJECTS)
 

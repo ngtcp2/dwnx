@@ -35,8 +35,10 @@
 #include "dwnx_map.h"
 #include "dwnx_idtr.h"
 #include "dwnx_pq.h"
+#include "dwnx_qre.h"
 
 #define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SEEN 0x01U
+#define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SENT 0x02U
 
 typedef struct dwnx_strm dwnx_strm;
 
@@ -111,6 +113,10 @@ struct dwnx_conn {
   struct {
     /* strmq contains dwnx_strm which has frames to send. */
     dwnx_pq strmq;
+    dwnx_qre qre;
+    /* offset is the offset the local endpoint has sent to the remote
+       endpoint. */
+    uint64_t offset;
     /* max_offset is the maximum offset that local endpoint can
        send. */
     uint64_t max_offset;
@@ -177,5 +183,44 @@ void dwnx_conn_tx_strmq_pop(dwnx_conn *conn);
  *     Out of memory.
  */
 int dwnx_conn_tx_strmq_push(dwnx_conn *conn, dwnx_strm *strm);
+
+typedef enum dwnx_vmsg_type {
+  DWNX_VMSG_TYPE_STREAM,
+} dwnx_vmsg_type;
+
+typedef struct dwnx_vmsg_stream {
+  /* strm is a stream that data is sent to. */
+  dwnx_strm *strm;
+  /* data is the pointer to dwnx_vec array which contains the stream
+     data to send. */
+  const dwnx_vec *data;
+  /* datacnt is the number of dwnx_vec pointed by data. */
+  size_t datacnt;
+  /* pdatalen is the pointer to the variable which the number of bytes
+     written is assigned to if pdatalen is not NULL. */
+  dwnx_ssize *pdatalen;
+  /* flags is bitwise OR of zero or more of
+     DWNX_WRITE_STREAM_FLAG_*. */
+  uint32_t flags;
+} dwnx_vmsg_stream;
+
+typedef struct dwnx_vmsg {
+  dwnx_vmsg_type type;
+  union {
+    dwnx_vmsg_stream stream;
+  };
+} dwnx_vmsg;
+
+dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
+                                dwnx_vmsg *vmsg, dwnx_tstamp ts);
+
+int dwnx_conn_write_transport_params(dwnx_conn *conn, dwnx_tstamp ts);
+
+int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts);
+
+int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
+                                 dwnx_strm *strm, uint32_t flags,
+                                 const dwnx_vec *datav, size_t datavcnt,
+                                 dwnx_tstamp ts);
 
 #endif /* !defined(DWNX_CONN_H) */

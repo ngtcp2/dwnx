@@ -757,6 +757,24 @@ typedef int (*dwnx_stream_reset)(dwnx_conn *conn, int64_t stream_id,
 /**
  * @functypedef
  *
+ * :type:`dwnx_stream_stop_sending` is invoked when a stream is no
+ * longer read by a local endpoint before it receives all stream data.
+ * This function is called at most once per stream.  |app_error_code|
+ * is the error code passed to `dwnx_conn_shutdown_stream_read` or
+ * `dwnx_conn_shutdown_stream`.
+ *
+ * The callback function must return 0 if it succeeds.  Returning
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library call return
+ * immediately.
+ */
+typedef int (*dwnx_stream_stop_sending)(dwnx_conn *conn, int64_t stream_id,
+                                        uint64_t app_error_code,
+                                        void *user_data,
+                                        void *stream_user_data);
+
+/**
+ * @functypedef
+ *
  * :type:`dwnx_recv_stop_sending` is invoked when a STOP_SENDING frame
  * is received from a remote endpoint for a stream identified by
  * |stream_id|.  |app_error_code| is the application error code carried
@@ -827,6 +845,13 @@ typedef struct dwnx_callbacks {
    */
   dwnx_stream_reset stream_reset;
   /**
+   * :member:`stream_stop_sending` is a callback function which is
+   * invoked when a local endpoint no longer reads from a stream
+   * before it receives all stream data.  This callback function is
+   * optional.
+   */
+  dwnx_stream_stop_sending stream_stop_sending;
+  /**
    * :member:`recv_stop_sending` is a callback function which is invoked
    * when a STOP_SENDING frame is received from a remote endpoint.  This
    * callback function is optional.
@@ -853,6 +878,20 @@ typedef struct dwnx_callbacks {
    * optional.
    */
   dwnx_extend_max_streams extend_max_local_streams_uni;
+  /**
+   * :member:`extend_max_remote_streams_bidi` is a callback function
+   * which is invoked when the number of bidirectional streams which a
+   * remote endpoint can open is increased.  This callback function is
+   * optional.
+   */
+  dwnx_extend_max_streams extend_max_remote_streams_bidi;
+  /**
+   * :member:`extend_max_remote_streams_uni` is a callback function
+   * which is invoked when the number of unidirectional streams which
+   * a remote endpoint can open is increased.  This callback function
+   * is optional.
+   */
+  dwnx_extend_max_streams extend_max_remote_streams_uni;
 } dwnx_callbacks;
 
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
@@ -1067,6 +1106,33 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_bidi_left(const dwnx_conn *conn);
  * violating stream concurrency limit.
  */
 DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
+
+/**
+ * @macrosection
+ *
+ * Write stream data flags
+ */
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_WRITE_STREAM_FLAG_NONE` indicates no flag set.
+ */
+#define DWNX_WRITE_STREAM_FLAG_NONE 0x00U
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_WRITE_STREAM_FLAG_FIN` indicates that a passed data is
+ * the final part of a stream.
+ */
+#define DWNX_WRITE_STREAM_FLAG_FIN 0x02U
+
+dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
+                                   size_t destlen, dwnx_ssize *pdatalen,
+                                   uint32_t flags, int64_t stream_id,
+                                   const dwnx_vec *datav, size_t datavcnt,
+                                   dwnx_tstamp ts);
 
 /**
  * @function

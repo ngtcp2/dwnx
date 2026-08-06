@@ -47,6 +47,7 @@ OBJECTS = \
 	dwnx_objalloc.c \
 	dwnx_opl.c \
 	dwnx_pq.c \
+	dwnx_qre.c \
 	dwnx_range.c \
 	dwnx_record_reader.c \
 	dwnx_str.c \
@@ -71,6 +72,7 @@ HFILES = \
 	dwnx_objalloc.h \
 	dwnx_opl.h \
 	dwnx_pq.h \
+	dwnx_qre.h \
 	dwnx_range.h \
 	dwnx_record_reader.h \
 	dwnx_str.h \

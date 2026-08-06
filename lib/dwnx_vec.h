@@ -49,4 +49,19 @@ static inline dwnx_vec dwnx_vec_sub(const dwnx_vec *vec, size_t len) {
   };
 }
 
+/*
+ * dwnx_vec_len_varint is similar to dwnx_vec_len, but it returns -1
+ * if the sum of the length exceeds DWNX_MAX_VARINT.
+ */
+int64_t dwnx_vec_len_varint(const dwnx_vec *vec, size_t n);
+
+/*
+ * dwnx_vec_copy_at_most copies |src| of length |srccnt| to |dst| of
+ * length |dstcnt|.  The total number of bytes which the copied
+ * dwnx_vec refers to is at most |left|.  The empty elements in |src|
+ * are ignored.  This function returns the number of elements copied.
+ */
+size_t dwnx_vec_copy_at_most(dwnx_vec *dst, size_t dstcnt, const dwnx_vec *src,
+                             size_t srccnt, size_t left);
+
 #endif /* !defined(DWNX_VEC_H) */
