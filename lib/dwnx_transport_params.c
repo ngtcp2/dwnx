@@ -40,6 +40,7 @@ void dwnx_transport_params_default(dwnx_transport_params *params) {
  */
 static size_t varint_paramlen(dwnx_transport_param_id id, uint64_t param) {
   size_t valuelen = dwnx_put_uvarintlen(param);
+
   return dwnx_put_uvarintlen(id) + dwnx_put_uvarintlen(valuelen) + valuelen;
 }
 
@@ -51,6 +52,7 @@ static uint8_t *write_varint_param(uint8_t *p, dwnx_transport_param_id id,
                                    uint64_t value) {
   p = dwnx_put_uvarint(p, id);
   p = dwnx_put_uvarint(p, dwnx_put_uvarintlen(value));
+
   return dwnx_put_uvarint(p, value);
 }
 
@@ -245,53 +247,65 @@ int dwnx_transport_params_decode(dwnx_transport_params *dest,
                               end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       break;
     case DWNX_TRANSPORT_PARAM_INITIAL_MAX_STREAM_DATA_BIDI_REMOTE:
       if (decode_varint_param(&dest->initial_max_stream_data_bidi_remote, &p,
                               end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       break;
     case DWNX_TRANSPORT_PARAM_INITIAL_MAX_STREAM_DATA_UNI:
       if (decode_varint_param(&dest->initial_max_stream_data_uni, &p, end) !=
           0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       break;
     case DWNX_TRANSPORT_PARAM_INITIAL_MAX_DATA:
       if (decode_varint_param(&dest->initial_max_data, &p, end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       break;
     case DWNX_TRANSPORT_PARAM_INITIAL_MAX_STREAMS_BIDI:
       if (decode_varint_param(&dest->initial_max_streams_bidi, &p, end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       if (dest->initial_max_streams_bidi > DWNX_MAX_STREAMS) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       break;
     case DWNX_TRANSPORT_PARAM_INITIAL_MAX_STREAMS_UNI:
       if (decode_varint_param(&dest->initial_max_streams_uni, &p, end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       if (dest->initial_max_streams_uni > DWNX_MAX_STREAMS) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       break;
     case DWNX_TRANSPORT_PARAM_MAX_IDLE_TIMEOUT:
       if (decode_varint_param(&dest->max_idle_timeout, &p, end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       if (dest->max_idle_timeout > UINT64_MAX / DWNX_MILLISECONDS) {
         dest->max_idle_timeout = UINT64_MAX;
       }
+
       dest->max_idle_timeout *= DWNX_MILLISECONDS;
+
       break;
     case DWNX_TRANSPORT_PARAM_MAX_RECORD_SIZE:
       if (decode_varint_param(&dest->max_record_size, &p, end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       break;
     case DWNX_TRANSPORT_PARAM_MAX_UDP_PAYLOAD_SIZE:
     case DWNX_TRANSPORT_PARAM_STATELESS_RESET_TOKEN:
@@ -309,10 +323,13 @@ int dwnx_transport_params_decode(dwnx_transport_params *dest,
       if (decode_varint(&valuelen, &p, end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       if ((size_t)(end - p) < valuelen) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
+
       p += valuelen;
+
       break;
     }
   }
