@@ -20,20 +20,15 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-SUBDIRS = lib tests doc
+AM_CPPFLAGS = @DEFS@
 
-if ENABLE_EXAMPLES
-SUBDIRS += third-party examples
-endif
+noinst_LTLIBRARIES = libhttp-parser.la
+libhttp_parser_la_SOURCES = \
+	http-parser/http_parser.c \
+	http-parser/http_parser.h
 
-dist_doc_DATA = README.rst
-
-ACLOCAL_AMFLAGS = -I m4
-
-# Format source files using clang-format.  Don't format source files
-# under third-party directory since we are not responsible for their
-# coding style.
-clang-format:
-	CLANGFORMAT=`git config --get clangformat.binary`; \
-	test -z $${CLANGFORMAT} && CLANGFORMAT="clang-format"; \
-	$${CLANGFORMAT} -i lib/*.{c,h} tests/*.{c,h} lib/includes/dwnx/*.h
+noinst_LTLIBRARIES += liburlparse.la
+liburlparse_la_SOURCES = \
+	urlparse/urlparse.c \
+	urlparse/urlparse.h
+liburlparse_la_CPPFLAGS = -I${srcdir}/urlparse

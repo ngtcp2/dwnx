@@ -20,20 +20,41 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-SUBDIRS = lib tests doc
+AM_CFLAGS = $(WARNCFLAGS) $(DEBUGCFLAGS)
+AM_CXXFLAGS = $(WARNCXXFLAGS) $(DEBUGCFLAGS)
+AM_CPPFLAGS = \
+	-I$(top_srcdir)/lib/includes \
+	-I$(top_builddir)/lib/includes \
+	-I$(top_srcdir)/third-party/urlparse \
+	@LIBEV_CFLAGS@ \
+	@LIBNGHTTP3_CFLAGS@ \
+	@OPENSSL_CFLAGS@ \
+	@JEMALLOC_CFLAGS@ \
+	@DEFS@ \
+	@EXTRA_DEFS@
+AM_LDFLAGS = -no-install \
+	@LIBTOOL_LDFLAGS@
+LDADD = $(top_builddir)/lib/libdwnx.la \
+	$(top_builddir)/third-party/liburlparse.la \
+	@LIBEV_LIBS@ \
+	@LIBNGHTTP3_LIBS@ \
+	@OPENSSL_LIBS@ \
+	@JEMALLOC_LIBS@
 
-if ENABLE_EXAMPLES
-SUBDIRS += third-party examples
-endif
+CLIENT_BASE_SRCS = \
+	client_base.cc client_base.h \
+	template.h \
+	debug.cc debug.h \
+	util.cc util.h \
+	util_openssl.cc \
+	shared.cc shared.h \
+	network.h
 
-dist_doc_DATA = README.rst
+noinst_PROGRAMS = h3client
 
-ACLOCAL_AMFLAGS = -I m4
+h3client_CPPFLAGS = ${AM_CPPFLAGS} -DWITH_EXAMPLE_HTTP3_PROTO_CODEC
 
-# Format source files using clang-format.  Don't format source files
-# under third-party directory since we are not responsible for their
-# coding style.
-clang-format:
-	CLANGFORMAT=`git config --get clangformat.binary`; \
-	test -z $${CLANGFORMAT} && CLANGFORMAT="clang-format"; \
-	$${CLANGFORMAT} -i lib/*.{c,h} tests/*.{c,h} lib/includes/dwnx/*.h
+h3client_SOURCES = \
+	${CLIENT_BASE_SRCS} \
+	client.cc client.h \
+	http3_client_proto_codec.cc http3_client_proto_codec.h

@@ -636,6 +636,10 @@ typedef struct dwnx_settings {
 
 DWNX_EXTERN void dwnx_settings_default(dwnx_settings *settings);
 
+typedef int (*dwnx_recv_transport_params)(dwnx_conn *conn,
+                                          const dwnx_transport_params *params,
+                                          void *user_data);
+
 /**
  * @macrosection
  *
@@ -842,6 +846,7 @@ typedef int (*dwnx_extend_max_streams)(dwnx_conn *conn, uint64_t max_streams,
                                        void *user_data);
 
 typedef struct dwnx_callbacks {
+  dwnx_recv_transport_params recv_transport_params;
   /**
    * :member:`recv_stream_data` is a callback function which is
    * invoked when stream data, which includes application data, is
@@ -916,14 +921,14 @@ typedef struct dwnx_callbacks {
 } dwnx_callbacks;
 
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
-                                     const dwnx_settings *settings,
                                      const dwnx_callbacks *callbacks,
+                                     const dwnx_settings *settings,
                                      const dwnx_transport_params *params,
                                      const dwnx_mem *mem, void *user_data);
 
 DWNX_EXTERN int dwnx_conn_client_new(dwnx_conn **pconn,
-                                     const dwnx_settings *settings,
                                      const dwnx_callbacks *callbacks,
+                                     const dwnx_settings *settings,
                                      const dwnx_transport_params *params,
                                      const dwnx_mem *mem, void *user_data);
 
@@ -1151,17 +1156,60 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  */
 #define DWNX_WRITE_STREAM_FLAG_FIN 0x02U
 
-dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
-                                   size_t destlen, dwnx_ssize *pdatalen,
-                                   uint32_t flags, int64_t stream_id,
-                                   const dwnx_vec *datav, size_t datavcnt,
-                                   dwnx_tstamp ts);
+DWNX_EXTERN dwnx_ssize
+dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest, size_t destlen,
+                        dwnx_ssize *pdatalen, uint32_t flags, int64_t stream_id,
+                        const dwnx_vec *datav, size_t datavcnt, dwnx_tstamp ts);
 
-dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
-                                  size_t destlen, dwnx_ssize *pdatalen,
-                                  uint32_t flags, int64_t stream_id,
-                                  const uint8_t *data, size_t datalen,
-                                  dwnx_tstamp ts);
+DWNX_EXTERN dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
+                                              size_t destlen,
+                                              dwnx_ssize *pdatalen,
+                                              uint32_t flags, int64_t stream_id,
+                                              const uint8_t *data,
+                                              size_t datalen, dwnx_tstamp ts);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_is_local_stream` returns nonzero if |stream_id| denotes
+ * a locally initiated stream.
+ */
+DWNX_EXTERN int dwnx_conn_is_local_stream(const dwnx_conn *conn,
+                                          int64_t stream_id);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_is_server` returns nonzero if |conn| is initialized as
+ * server.
+ */
+DWNX_EXTERN int dwnx_conn_is_server(const dwnx_conn *conn);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_get_timestamp` returns the latest timestamp that is
+ * known to |conn|.
+ */
+DWNX_EXTERN dwnx_tstamp dwnx_conn_get_timestamp(const dwnx_conn *conn);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_get_max_data_left` returns the number of bytes that this
+ * local endpoint can send in this connection without violating
+ * connection-level flow control.
+ */
+DWNX_EXTERN uint64_t dwnx_conn_get_max_data_left(const dwnx_conn *conn);
+
+/**
+ * @function
+ *
+ * `dwnx_strerror` returns the text representation of |liberr|.
+ * |liberr| must be one of dwnx library error codes (which is defined
+ * as :macro:`DWNX_ERR_* <DWNX_ERR_INVALID_ARGUMENT>` macros).
+ */
+DWNX_EXTERN const char *dwnx_strerror(int liberr);
 
 /**
  * @function
@@ -1310,6 +1358,14 @@ DWNX_EXTERN void dwnx_ccerr_set_application_error(dwnx_ccerr *ccerr,
                                                   uint64_t error_code,
                                                   const uint8_t *reason,
                                                   size_t reasonlen);
+
+/**
+ * @function
+ *
+ * `dwnx_is_bidi_stream` returns nonzero if |stream_id| denotes
+ * bidirectional stream.
+ */
+DWNX_EXTERN int dwnx_is_bidi_stream(int64_t stream_id);
 
 #ifdef _MSC_VER
 #  pragma warning(pop)

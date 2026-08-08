@@ -68,6 +68,33 @@ AC_ARG_ENABLE([lib-only],
                     [Build libdwnx and libdwnx_crypto only.])],
     [lib_only=$enableval], [lib_only=no])
 
+AC_ARG_WITH([jemalloc],
+    [AS_HELP_STRING([--with-jemalloc],
+                    [Use jemalloc [default=check]])],
+    [request_jemalloc=$withval], [request_jemalloc=check])
+
+AC_ARG_WITH([libnghttp3],
+    [AS_HELP_STRING([--with-libnghttp3],
+                    [Use libnghttp3 [default=check]])],
+    [request_libnghttp3=$withval], [request_libnghttp3=check])
+
+AC_ARG_WITH([libev],
+    [AS_HELP_STRING([--with-libev],
+                    [Use libev [default=check]])],
+    [request_libev=$withval], [request_libev=check])
+
+AC_ARG_WITH([openssl],
+    [AS_HELP_STRING([--with-openssl],
+                    [Use openssl [default=check]])],
+    [request_openssl=$withval], [request_openssl=check])
+
+AC_ARG_VAR([LIBEV_CFLAGS], [C compiler flags for libev, skipping any checks])
+AC_ARG_VAR([LIBEV_LIBS], [linker flags for libev, skipping any checks])
+
+AC_ARG_VAR([JEMALLOC_CFLAGS],
+           [C compiler flags for jemalloc, skipping any checks])
+AC_ARG_VAR([JEMALLOC_LIBS], [linker flags for jemalloc, skipping any checks])
+
 AC_ARG_VAR([LIBTOOL_LDFLAGS],
            [libtool specific flags (e.g., -static-libtool-libs)])
 
@@ -94,6 +121,119 @@ esac
 # Checks for libraries.
 
 AM_CONDITIONAL([ENABLE_SHARED], [ test "x${enable_shared}" = "xyes" ])
+
+# OpenSSL (required for examples)
+have_openssl=no
+if test "x${lib_only}" = "xno"; then
+  if test "x${request_openssl}" != "xno"; then
+    PKG_CHECK_MODULES([OPENSSL], [openssl >= 1.1.1],
+                      [have_openssl=yes], [have_openssl=no])
+    if test "x${have_openssl}" = "xno"; then
+      AC_MSG_NOTICE($OPENSSL_PKG_ERRORS)
+    fi
+  fi
+
+  if test "x${request_openssl}" = "xyes" &&
+     test "x${have_openssl}" != "xyes"; then
+    AC_MSG_ERROR([openssl was requested (--with-openssl) but not found])
+  fi
+fi
+
+# libnghttp3 (required for examples)
+have_libnghttp3=no
+if test "x${lib_only}" = "xno"; then
+  if test "x${request_libnghttp3}" != "xno"; then
+    PKG_CHECK_MODULES([LIBNGHTTP3], [libnghttp3 >= 1.18.0],
+                      [have_libnghttp3=yes], [have_libnghttp3=no])
+    if test "${have_libnghttp3}" = "xno"; then
+      AC_MSG_NOTICE($LIBNGHTTP3_PKG_ERRORS)
+    fi
+  fi
+
+  if test "x${request_libnghttp3}" = "xyes" &&
+     test "x${have_libnghttp3}" != "xyes"; then
+    AC_MSG_ERROR([libnghttp3 was requested (--with-libnghttp3) but not found])
+  fi
+fi
+
+AM_CONDITIONAL([HAVE_NGHTTP3], [ test "x${have_libnghttp3}" = "xyes" ])
+
+# libev (required for examples)
+have_libev=no
+if test "x${lib_only}" = "xno"; then
+  if test "x${request_libev}" != "xno"; then
+    if test "x${LIBEV_LIBS}" = "x" && test "x${LIBEV_CFLAGS}" = "x"; then
+      # libev does not have pkg-config file.  Check it in an old way.
+      save_LIBS=$LIBS
+      # android requires -lm for floor
+      AC_CHECK_LIB([ev], [ev_time], [have_libev=yes], [have_libev=no], [-lm])
+      if test "x${have_libev}" = "xyes"; then
+        AC_CHECK_HEADER([ev.h], [have_libev=yes], [have_libev=no])
+        if test "x${have_libev}" = "xyes"; then
+          LIBEV_LIBS=-lev
+          LIBEV_CFLAGS=
+        fi
+      fi
+      LIBS=$save_LIBS
+    else
+      have_libev=yes
+    fi
+  fi
+
+  if test "x${request_libev}" = "xyes" &&
+     test "x${have_libev}" != "xyes"; then
+    AC_MSG_ERROR([libev was requested (--with-libev) but not found])
+  fi
+fi
+
+# jemalloc (used by examples, optional)
+have_jemalloc=no
+if test "x${lib_only}" = "xno"; then
+  if test "x${request_jemalloc}" != "xno"; then
+    if test "x${JEMALLOC_LIBS}" = "x" && test "x${JEMALLOC_CFLAGS}" = "x"; then
+      save_LIBS=$LIBS
+      AC_SEARCH_LIBS([malloc_stats_print], [jemalloc], [have_jemalloc=yes], [],
+                     [$PTHREAD_LDFLAGS])
+
+      if test "x${have_jemalloc}" = "xyes"; then
+        jemalloc_libs=${ac_cv_search_malloc_stats_print}
+      else
+        # On Darwin, malloc_stats_print is je_malloc_stats_print
+        AC_SEARCH_LIBS([je_malloc_stats_print], [jemalloc], [have_jemalloc=yes],
+                       [], [$PTHREAD_LDFLAGS])
+
+        if test "x${have_jemalloc}" = "xyes"; then
+          jemalloc_libs=${ac_cv_search_je_malloc_stats_print}
+        fi
+      fi
+
+      LIBS=$save_LIBS
+
+      if test "x${have_jemalloc}" = "xyes" &&
+         test "x${jemalloc_libs}" != "xnone required"; then
+        JEMALLOC_LIBS=${jemalloc_libs}
+      fi
+    else
+      have_jemalloc=yes
+    fi
+  fi
+
+  if test "x${request_jemalloc}" = "xyes" &&
+     test "x${have_jemalloc}" != "xyes"; then
+    AC_MSG_ERROR([jemalloc was requested (--with-jemalloc) but not found])
+  fi
+fi
+
+enable_examples=no
+if test "x${lib_only}" = "xno" &&
+   test "x${have_libnghttp3}" = "xyes" &&
+   test "x${have_libev}" = "xyes" &&
+   test "x${have_openssl}" = "xyes" &&
+   test "x${HAVE_CXX23}" = "x1"; then
+  enable_examples=yes
+fi
+
+AM_CONDITIONAL([ENABLE_EXAMPLES], [ test "x${enable_examples}" = "xyes" ])
 
 # Checks for header files.
 AC_CHECK_HEADERS([ \
@@ -260,6 +400,8 @@ AC_CONFIG_FILES([
   lib/includes/dwnx/version.h
   tests/Makefile
   doc/Makefile
+  third-party/Makefile
+  examples/Makefile
 ])
 AC_OUTPUT
 
@@ -289,4 +431,12 @@ AC_MSG_NOTICE([summary of build options:
       Static:         ${enable_static}
     Libtool:
       LIBTOOL_LDFLAGS: ${LIBTOOL_LDFLAGS}
+    Libs:
+      Libev:          ${have_libev} (CFLAGS='${LIBEV_CFLAGS}' LIBS='${LIBEV_LIBS}')
+      Libnghttp3:     ${have_libnghttp3} (CFLAGS='${LIBNGHTTP3_CFLAGS}' LIBS='${LIBNGHTTP3_LIBS}')
+      OpenSSL:        ${have_openssl} (CFLAGS='${OPENSSL_CFLAGS}' LIBS='${OPENSSL_LIBS}')
+      Jemalloc:       ${have_jemalloc} (CFLAGS='${JEMALLOC_CFLAGS}' LIBS='${JEMALLOC_LIBS}')
+    Libtool:
+      LIBTOOL_LDFLAGS: ${LIBTOOL_LDFLAGS}
+    Examples:         ${enable_examples}
 ])

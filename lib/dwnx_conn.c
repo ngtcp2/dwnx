@@ -48,6 +48,23 @@ static int conn_local_stream(const dwnx_conn *conn, int64_t stream_id) {
  */
 static int bidi_stream(int64_t stream_id) { return (stream_id & 0x2) == 0; }
 
+static int
+conn_call_recv_transport_params(dwnx_conn *conn,
+                                const dwnx_transport_params *params) {
+  int rv;
+
+  if (!conn->callbacks.recv_transport_params) {
+    return 0;
+  }
+
+  rv = conn->callbacks.recv_transport_params(conn, params, conn->user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
 static int conn_call_stream_open(dwnx_conn *conn, dwnx_strm *strm) {
   int rv;
 
@@ -269,16 +286,16 @@ static int cycle_less(const dwnx_pq_entry *lhs, const dwnx_pq_entry *rhs) {
   return rs->cycle - ls->cycle <= 1;
 }
 
-static int conn_new(dwnx_conn **pconn, const dwnx_settings *settings,
-                    const dwnx_callbacks *callbacks,
+static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
+                    const dwnx_settings *settings,
                     const dwnx_transport_params *params, const dwnx_mem *mem,
                     void *user_data) {
   void *ptr;
   dwnx_conn *conn;
   char *logbuf;
 
-  assert(settings);
   assert(callbacks);
+  assert(settings);
   assert(params);
   assert(params->initial_max_stream_data_bidi_local <= DWNX_MAX_VARINT);
   assert(params->initial_max_stream_data_bidi_remote <= DWNX_MAX_VARINT);
@@ -303,9 +320,9 @@ static int conn_new(dwnx_conn **pconn, const dwnx_settings *settings,
   logbuf = (char *)ptr + sizeof(*conn);
 
   conn->mem = mem;
+  conn->callbacks = *callbacks;
   conn->settings = *settings;
   settings = &conn->settings;
-  conn->callbacks = *callbacks;
   conn->local.transport_params = *params;
   /* We do not let application increase max record size. */
   conn->local.transport_params.max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE;
@@ -338,13 +355,13 @@ static int conn_new(dwnx_conn **pconn, const dwnx_settings *settings,
   return 0;
 }
 
-int dwnx_conn_server_new(dwnx_conn **pconn, const dwnx_settings *settings,
-                         const dwnx_callbacks *callbacks,
+int dwnx_conn_server_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
+                         const dwnx_settings *settings,
                          const dwnx_transport_params *params,
                          const dwnx_mem *mem, void *user_data) {
   int rv;
 
-  rv = conn_new(pconn, settings, callbacks, params, mem, user_data);
+  rv = conn_new(pconn, callbacks, settings, params, mem, user_data);
   if (rv != 0) {
     return rv;
   }
@@ -356,13 +373,13 @@ int dwnx_conn_server_new(dwnx_conn **pconn, const dwnx_settings *settings,
   return 0;
 }
 
-int dwnx_conn_client_new(dwnx_conn **pconn, const dwnx_settings *settings,
-                         const dwnx_callbacks *callbacks,
+int dwnx_conn_client_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
+                         const dwnx_settings *settings,
                          const dwnx_transport_params *params,
                          const dwnx_mem *mem, void *user_data) {
   int rv;
 
-  rv = conn_new(pconn, settings, callbacks, params, mem, user_data);
+  rv = conn_new(pconn, callbacks, settings, params, mem, user_data);
   if (rv != 0) {
     return rv;
   }
@@ -660,6 +677,26 @@ static int conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
     dwnx_map_each(&conn->strms, set_max_stream_offset, conn);
   }
 
+  rv = conn_call_recv_transport_params(conn, remote_params);
+  if (rv != 0) {
+    return rv;
+  }
+
+  if (conn->tx.bidi.max_streams) {
+    rv =
+      conn_call_extend_max_local_streams_bidi(conn, conn->tx.bidi.max_streams);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
+  if (conn->tx.uni.max_streams) {
+    rv = conn_call_extend_max_local_streams_uni(conn, conn->tx.uni.max_streams);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
   return 0;
 }
 
@@ -765,9 +802,9 @@ static int conn_recv_stream(dwnx_conn *conn, const dwnx_frame_stream *fr,
   strm->rx.last_offset = fr_end_offset;
 
   if (fr->fin) {
-    dwnx_strm_shutdown(strm, DWNX_STRM_FLAG_SHUT_RD);
-
     if (fr->len == 0) {
+      dwnx_strm_shutdown(strm, DWNX_STRM_FLAG_SHUT_RD);
+
       rv = conn_call_recv_stream_data(conn, strm, DWNX_STREAM_DATA_FLAG_FIN,
                                       fr->offset, NULL, 0);
       if (rv != 0) {
@@ -779,6 +816,31 @@ static int conn_recv_stream(dwnx_conn *conn, const dwnx_frame_stream *fr,
   }
 
   return 0;
+}
+
+static int conn_recv_stream_data(dwnx_conn *conn, dwnx_strm *strm, int fin,
+                                 uint64_t offset, const uint8_t *data,
+                                 size_t datalen) {
+  int rv;
+
+  if (strm->flags & DWNX_STRM_FLAG_STOP_SENDING) {
+    dwnx_conn_extend_max_offset(conn, datalen);
+  } else {
+    rv = conn_call_recv_stream_data(
+      conn, strm, fin ? DWNX_STREAM_DATA_FLAG_FIN : DWNX_STREAM_DATA_FLAG_NONE,
+      offset, data, datalen);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
+  if (!fin) {
+    return 0;
+  }
+
+  dwnx_strm_shutdown(strm, DWNX_STRM_FLAG_SHUT_RD);
+
+  return dwnx_conn_close_stream_if_shut_rdwr(conn, strm);
 }
 
 static int conn_recv_reset_stream(dwnx_conn *conn,
@@ -1557,19 +1619,14 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       len = dwnx_record_reader_field_avail(rcrd, (size_t)(end - p));
 
-      if (strm->flags & DWNX_STRM_FLAG_STOP_SENDING) {
-        dwnx_conn_extend_max_offset(conn, len);
-      } else {
-        rv = conn_call_recv_stream_data(
-          conn, strm,
-          (rcrd->fr.stream.fin && rcrd->field_left == len)
-            ? DWNX_STREAM_DATA_FLAG_FIN
-            : DWNX_STREAM_DATA_FLAG_NONE,
-          strm->rx.last_offset - rcrd->field_left, p, len);
-        if (rv != 0) {
-          return rv;
-        }
+      rv = conn_recv_stream_data(
+        conn, strm, rcrd->fr.stream.fin && rcrd->field_left == len,
+        strm->rx.last_offset - rcrd->field_left, p, len);
+      if (rv != 0) {
+        return rv;
       }
+
+      /* conn_recv_stream_data may delete strm */
 
       p += len;
       rcrd->record_left -= len;
@@ -2663,6 +2720,20 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
   return 0;
 }
 
+int dwnx_conn_is_local_stream(const dwnx_conn *conn, int64_t stream_id) {
+  return conn_local_stream(conn, stream_id);
+}
+
+int dwnx_conn_is_server(const dwnx_conn *conn) { return conn->server; }
+
+dwnx_tstamp dwnx_conn_get_timestamp(const dwnx_conn *conn) {
+  return conn->log.last_ts;
+}
+
+uint64_t dwnx_conn_get_max_data_left(const dwnx_conn *conn) {
+  return conn->tx.max_offset - conn->tx.offset;
+}
+
 static void ccerr_init(dwnx_ccerr *ccerr, dwnx_ccerr_type type,
                        uint64_t error_code, const uint8_t *reason,
                        size_t reasonlen) {
@@ -2700,3 +2771,5 @@ void dwnx_ccerr_set_application_error(dwnx_ccerr *ccerr, uint64_t error_code,
                                       const uint8_t *reason, size_t reasonlen) {
   ccerr_init(ccerr, DWNX_CCERR_TYPE_APPLICATION, error_code, reason, reasonlen);
 }
+
+int dwnx_is_bidi_stream(int64_t stream_id) { return bidi_stream(stream_id); }

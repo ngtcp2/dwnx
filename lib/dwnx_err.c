@@ -24,6 +24,63 @@
  */
 #include "dwnx_err.h"
 
+const char *dwnx_strerror(int liberr) {
+  switch (liberr) {
+  case 0:
+    return "NO_ERROR";
+  case DWNX_ERR_INVALID_ARGUMENT:
+    return "ERR_INVALID_ARGUMENT";
+  case DWNX_ERR_NOBUF:
+    return "ERR_NOBUF";
+  case DWNX_ERR_PROTO:
+    return "ERR_PROTO";
+  case DWNX_ERR_INVALID_STATE:
+    return "ERR_INVALID_STATE";
+  case DWNX_ERR_STREAM_ID_BLOCKED:
+    return "ERR_STREAM_ID_BLOCKED";
+  case DWNX_ERR_STREAM_IN_USE:
+    return "ERR_STREAM_IN_USE";
+  case DWNX_ERR_STREAM_DATA_BLOCKED:
+    return "ERR_STREAM_DATA_BLOCKED";
+  case DWNX_ERR_FLOW_CONTROL:
+    return "ERR_FLOW_CONTROL";
+  case DWNX_ERR_STREAM_LIMIT:
+    return "ERR_STREAM_LIMIT";
+  case DWNX_ERR_FINAL_SIZE:
+    return "ERR_FINAL_SIZE";
+  case DWNX_ERR_NOMEM:
+    return "ERR_NOMEM";
+  case DWNX_ERR_REQUIRED_TRANSPORT_PARAM:
+    return "ERR_REQUIRED_TRANSPORT_PARAM";
+  case DWNX_ERR_MALFORMED_TRANSPORT_PARAM:
+    return "ERR_MALFORMED_TRANSPORT_PARAM";
+  case DWNX_ERR_FRAME_ENCODING:
+    return "ERR_FRAME_ENCODING";
+  case DWNX_ERR_STREAM_SHUT_WR:
+    return "ERR_STREAM_SHUT_WR";
+  case DWNX_ERR_STREAM_NOT_FOUND:
+    return "ERR_STREAM_NOT_FOUND";
+  case DWNX_ERR_STREAM_STATE:
+    return "ERR_STREAM_STATE";
+  case DWNX_ERR_CLOSING:
+    return "ERR_CLOSING";
+  case DWNX_ERR_DRAINING:
+    return "ERR_DRAINING";
+  case DWNX_ERR_TRANSPORT_PARAM:
+    return "ERR_TRANSPORT_PARAM";
+  case DWNX_ERR_CALLBACK_FAILURE:
+    return "ERR_CALLBACK_FAILURE";
+  case DWNX_ERR_INTERNAL:
+    return "ERR_INTERNAL";
+  case DWNX_ERR_WRITE_MORE:
+    return "ERR_WRITE_MORE";
+  case DWNX_ERR_IDLE_CLOSE:
+    return "ERR_IDLE_CLOSE";
+  default:
+    return "(unknown)";
+  }
+}
+
 int dwnx_err_is_fatal(int liberr) { return liberr < DWNX_ERR_FATAL; }
 
 uint64_t dwnx_err_infer_quic_transport_error_code(int liberr) {

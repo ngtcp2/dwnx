@@ -101,8 +101,8 @@ typedef struct userdata {
 } userdata;
 
 typedef struct conn_options {
-  const dwnx_settings *settings;
   const dwnx_callbacks *callbacks;
+  const dwnx_settings *settings;
   const dwnx_transport_params *params;
   const dwnx_mem *mem;
   void *user_data;
@@ -233,18 +233,18 @@ static void server_default_transport_params(dwnx_transport_params *params) {
 
 static void setup_default_server_with_options(dwnx_conn **pconn,
                                               conn_options opts) {
-  dwnx_settings settings;
   dwnx_callbacks callbacks = {0};
+  dwnx_settings settings;
   dwnx_transport_params params;
   int rv;
+
+  if (!opts.callbacks) {
+    opts.callbacks = &callbacks;
+  }
 
   if (!opts.settings) {
     server_default_settings(&settings);
     opts.settings = &settings;
-  }
-
-  if (!opts.callbacks) {
-    opts.callbacks = &callbacks;
   }
 
   if (!opts.params) {
@@ -252,7 +252,7 @@ static void setup_default_server_with_options(dwnx_conn **pconn,
     opts.params = &params;
   }
 
-  rv = dwnx_conn_server_new(pconn, opts.settings, opts.callbacks, opts.params,
+  rv = dwnx_conn_server_new(pconn, opts.callbacks, opts.settings, opts.params,
                             opts.mem, opts.user_data);
 
   assert_int(0, ==, rv);
@@ -279,18 +279,18 @@ static void client_default_transport_params(dwnx_transport_params *params) {
 
 static void setup_default_client_with_options(dwnx_conn **pconn,
                                               conn_options opts) {
-  dwnx_settings settings;
   dwnx_callbacks callbacks = {0};
+  dwnx_settings settings;
   dwnx_transport_params params;
   int rv;
+
+  if (!opts.callbacks) {
+    opts.callbacks = &callbacks;
+  }
 
   if (!opts.settings) {
     client_default_settings(&settings);
     opts.settings = &settings;
-  }
-
-  if (!opts.callbacks) {
-    opts.callbacks = &callbacks;
   }
 
   if (!opts.params) {
@@ -298,7 +298,7 @@ static void setup_default_client_with_options(dwnx_conn **pconn,
     opts.params = &params;
   }
 
-  rv = dwnx_conn_client_new(pconn, opts.settings, opts.callbacks, opts.params,
+  rv = dwnx_conn_client_new(pconn, opts.callbacks, opts.settings, opts.params,
                             opts.mem, opts.user_data);
 
   assert_int(0, ==, rv);
