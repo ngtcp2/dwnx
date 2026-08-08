@@ -471,6 +471,10 @@ std::expected<void, Error> Client::tls_handshake() {
 }
 
 std::expected<void, Error> Client::feed_data(std::span<const uint8_t> data) {
+  if (!config.quiet) {
+    std::println(stderr, "Read {} bytes from TLS stack", data.size());
+  }
+
   if (auto rv =
         dwnx_conn_read(conn_, data.data(), data.size(), util::timestamp());
       rv != 0) {
@@ -654,6 +658,10 @@ std::expected<int, Error> create_sock(Address &remote_addr, const char *addr,
 
 std::expected<std::span<const uint8_t>, Error>
 Client::send_packet(std::span<const uint8_t> data) {
+  if (!config.quiet) {
+    std::println(stderr, "Send {} bytes", data.size());
+  }
+
   ERR_clear_error();
   auto nwrite = SSL_write(ssl_, data.data(), static_cast<int>(data.size()));
   if (nwrite <= 0) {
