@@ -2662,3 +2662,41 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
 
   return 0;
 }
+
+static void ccerr_init(dwnx_ccerr *ccerr, dwnx_ccerr_type type,
+                       uint64_t error_code, const uint8_t *reason,
+                       size_t reasonlen) {
+  *ccerr = (dwnx_ccerr){
+    .type = type,
+    .error_code = error_code,
+    .reason = (uint8_t *)reason,
+    .reasonlen = reasonlen,
+  };
+}
+
+void dwnx_ccerr_default(dwnx_ccerr *ccerr) {
+  ccerr_init(ccerr, DWNX_CCERR_TYPE_TRANSPORT, DWNX_NO_ERROR, NULL, 0);
+}
+
+void dwnx_ccerr_set_transport_error(dwnx_ccerr *ccerr, uint64_t error_code,
+                                    const uint8_t *reason, size_t reasonlen) {
+  ccerr_init(ccerr, DWNX_CCERR_TYPE_TRANSPORT, error_code, reason, reasonlen);
+}
+
+void dwnx_ccerr_set_liberr(dwnx_ccerr *ccerr, int liberr, const uint8_t *reason,
+                           size_t reasonlen) {
+  if (liberr == DWNX_ERR_IDLE_CLOSE) {
+    ccerr_init(ccerr, DWNX_CCERR_TYPE_IDLE_CLOSE, DWNX_NO_ERROR, reason,
+               reasonlen);
+
+    return;
+  }
+
+  dwnx_ccerr_set_transport_error(
+    ccerr, dwnx_err_infer_quic_transport_error_code(liberr), reason, reasonlen);
+}
+
+void dwnx_ccerr_set_application_error(dwnx_ccerr *ccerr, uint64_t error_code,
+                                      const uint8_t *reason, size_t reasonlen) {
+  ccerr_init(ccerr, DWNX_CCERR_TYPE_APPLICATION, error_code, reason, reasonlen);
+}

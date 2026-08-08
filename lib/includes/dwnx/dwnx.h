@@ -1172,6 +1172,145 @@ dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
  */
 DWNX_EXTERN int dwnx_err_is_fatal(int liberr);
 
+/**
+ * @function
+ *
+ * `dwnx_err_infer_quic_transport_error_code` returns a QUIC transport
+ * error code which corresponds to |liberr|.  |liberr| must be one of
+ * dwnx library error codes (which is defined as :macro:`DWNX_ERR_*
+ * <DWNX_ERR_INVALID_ARGUMENT>` macros).
+ */
+DWNX_EXTERN uint64_t dwnx_err_infer_quic_transport_error_code(int liberr);
+
+/**
+ * @enum
+ *
+ * :type:`dwnx_ccerr_type` defines connection error type.
+ */
+typedef enum dwnx_ccerr_type {
+  /**
+   * :enum:`DWNX_CCERR_TYPE_TRANSPORT` indicates the QUIC transport
+   * error, and the error code is QUIC transport error code.
+   */
+  DWNX_CCERR_TYPE_TRANSPORT,
+  /**
+   * :enum:`DWNX_CCERR_TYPE_APPLICATION` indicates an application
+   * error, and the error code is application error code.
+   */
+  DWNX_CCERR_TYPE_APPLICATION,
+  /**
+   * :enum:`DWNX_CCERR_TYPE_IDLE_CLOSE` is a special case of QUIC
+   * transport error, and it indicates that connection is closed
+   * because of idle timeout.
+   */
+  DWNX_CCERR_TYPE_IDLE_CLOSE
+} dwnx_ccerr_type;
+
+/**
+ * @struct
+ *
+ * :type:`dwnx_ccerr` contains connection error code, its type, a
+ * frame type that caused this error, and the optional reason phrase.
+ */
+typedef struct dwnx_ccerr {
+  /**
+   * :member:`type` is the type of this error.
+   */
+  dwnx_ccerr_type type;
+  /**
+   * :member:`error_code` is the error code for connection closure.
+   * Its interpretation depends on :member:`type`.
+   */
+  uint64_t error_code;
+  /**
+   * :member:`frame_type` is the type of QUIC frame which triggers
+   * this connection error.  This field is set to 0 if the frame type
+   * is unknown.
+   */
+  uint64_t frame_type;
+  /**
+   * :member:`reason` points to the buffer which contains a reason
+   * phrase.  It may be NULL if there is no reason phrase.  If it is
+   * received from a remote endpoint, it is truncated to at most 1024
+   * bytes.
+   */
+  const uint8_t *reason;
+  /**
+   * :member:`reasonlen` is the length of data pointed by
+   * :member:`reason`.
+   */
+  size_t reasonlen;
+} dwnx_ccerr;
+
+/**
+ * @function
+ *
+ * `dwnx_ccerr_default` initializes |ccerr| with the default values.
+ * It sets the following fields:
+ *
+ * - :member:`type <dwnx_ccerr.type>` =
+ *   :enum:`dwnx_ccerr_type.DWNX_CCERR_TYPE_TRANSPORT`
+ * - :member:`error_code <dwnx_ccerr.error_code>` =
+ *   :macro:`DWNX_NO_ERROR`.
+ * - :member:`frame_type <dwnx_ccerr.frame_type>` = 0
+ * - :member:`reason <dwnx_ccerr.reason>` = NULL
+ * - :member:`reasonlen <dwnx_ccerr.reasonlen>` = 0
+ */
+DWNX_EXTERN void dwnx_ccerr_default(dwnx_ccerr *ccerr);
+
+/**
+ * @function
+ *
+ * `dwnx_ccerr_set_transport_error` sets :member:`ccerr->type
+ * <dwnx_ccerr.type>` to
+ * :enum:`dwnx_ccerr_type.DWNX_CCERR_TYPE_TRANSPORT`, and
+ * :member:`ccerr->error_code <dwnx_ccerr.error_code>` to
+ * |error_code|.  |reason| is the reason phrase of length |reasonlen|.
+ * This function does not make a copy of the reason phrase.
+ */
+DWNX_EXTERN void dwnx_ccerr_set_transport_error(dwnx_ccerr *ccerr,
+                                                uint64_t error_code,
+                                                const uint8_t *reason,
+                                                size_t reasonlen);
+
+/**
+ * @function
+ *
+ * `dwnx_ccerr_set_liberr` sets type and error_code based on |liberr|.
+ *
+ * |reason| is the reason phrase of length |reasonlen|.  This function
+ * does not make a copy of the reason phrase.
+ *
+ * If |liberr| is :macro:`DWNX_ERR_IDLE_CLOSE`, :member:`ccerr->type
+ * <dwnx_ccerr.type>` is set to
+ * :enum:`dwnx_ccerr_type.DWNX_CCERR_TYPE_IDLE_CLOSE`, and
+ * :member:`ccerr->error_code <dwnx_ccerr.error_code>` to
+ * :macro:`DWNX_NO_ERROR`.
+ *
+ * Otherwise, :member:`ccerr->type <dwnx_ccerr.type>` is set to
+ * :enum:`dwnx_ccerr_type.DWNX_CCERR_TYPE_TRANSPORT`, and
+ * :member:`ccerr->error_code <dwnx_ccerr.error_code>` is set to an
+ * error code inferred by |liberr| (see
+ * `dwnx_err_infer_quic_transport_error_code`).
+ */
+DWNX_EXTERN void dwnx_ccerr_set_liberr(dwnx_ccerr *ccerr, int liberr,
+                                       const uint8_t *reason, size_t reasonlen);
+
+/**
+ * @function
+ *
+ * `dwnx_ccerr_set_application_error` sets :member:`ccerr->type
+ * <dwnx_ccerr.type>` to
+ * :enum:`dwnx_ccerr_type.DWNX_CCERR_TYPE_APPLICATION`, and
+ * :member:`ccerr->error_code <dwnx_ccerr.error_code>` to
+ * |error_code|.  |reason| is the reason phrase of length |reasonlen|.
+ * This function does not make a copy of the reason phrase.
+ */
+DWNX_EXTERN void dwnx_ccerr_set_application_error(dwnx_ccerr *ccerr,
+                                                  uint64_t error_code,
+                                                  const uint8_t *reason,
+                                                  size_t reasonlen);
+
 #ifdef _MSC_VER
 #  pragma warning(pop)
 #endif /* defined(_MSC_VER) */

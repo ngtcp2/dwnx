@@ -25,3 +25,31 @@
 #include "dwnx_err.h"
 
 int dwnx_err_is_fatal(int liberr) { return liberr < DWNX_ERR_FATAL; }
+
+uint64_t dwnx_err_infer_quic_transport_error_code(int liberr) {
+  switch (liberr) {
+  case 0:
+    return DWNX_NO_ERROR;
+  case DWNX_ERR_FRAME_ENCODING:
+    return DWNX_FRAME_ENCODING_ERROR;
+  case DWNX_ERR_FLOW_CONTROL:
+    return DWNX_FLOW_CONTROL_ERROR;
+  case DWNX_ERR_STREAM_LIMIT:
+    return DWNX_STREAM_LIMIT_ERROR;
+  case DWNX_ERR_FINAL_SIZE:
+    return DWNX_FINAL_SIZE_ERROR;
+  case DWNX_ERR_REQUIRED_TRANSPORT_PARAM:
+  case DWNX_ERR_MALFORMED_TRANSPORT_PARAM:
+  case DWNX_ERR_TRANSPORT_PARAM:
+    return DWNX_TRANSPORT_PARAMETER_ERROR;
+  case DWNX_ERR_INVALID_ARGUMENT:
+  case DWNX_ERR_NOMEM:
+  case DWNX_ERR_CALLBACK_FAILURE:
+  case DWNX_ERR_INTERNAL:
+    return DWNX_INTERNAL_ERROR;
+  case DWNX_ERR_STREAM_STATE:
+    return DWNX_STREAM_STATE_ERROR;
+  default:
+    return DWNX_PROTOCOL_VIOLATION;
+  }
+}
