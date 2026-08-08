@@ -265,4 +265,192 @@ dwnx_frame_encode_max_stream_data(uint8_t *out, size_t outlen,
 dwnx_ssize dwnx_frame_encode_max_streams(uint8_t *out, size_t outlen,
                                          const dwnx_frame_max_streams *fr);
 
+typedef struct dwnx_frd {
+  union {
+    dwnx_vec data;
+    dwnx_transport_params params;
+  } buf;
+} dwnx_frd;
+
+void dwnx_frd_init(dwnx_frd *frd);
+
+dwnx_ssize dwnx_frd_decode(dwnx_frd *frd, dwnx_frame *dest,
+                           const uint8_t *payload, size_t payloadlen);
+
+dwnx_ssize dwnx_frame_decode_qx_transport_parameters(
+  dwnx_frame_qx_transport_parameters *dest, const uint8_t *payload,
+  size_t payloadlen);
+
+dwnx_ssize dwnx_frame_decode_qx_ping(dwnx_frame_qx_ping *dest,
+                                     const uint8_t *payload, size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_padding decodes contiguous PADDING frames from
+ * |payload| of length |payloadlen|.  It continues to parse frames as
+ * long as the frame type is PADDING.  It finishes when it encounters
+ * the frame type which is not PADDING, or all input data is read.
+ * The first byte (payload[0]) must be DWNX_FRAME_PADDING.  This
+ * function returns the exact number of bytes read to decode PADDING
+ * frames.
+ */
+dwnx_ssize dwnx_frame_decode_padding(dwnx_frame_padding *dest,
+                                     const uint8_t *payload, size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_stream decodes STREAM frame from |payload| of
+ * length |payloadlen|.  The result is stored in the object pointed by
+ * |dest|.  STREAM frame must start at payload[0].  This function
+ * finishes when it decodes one STREAM frame, and returns the exact
+ * number of bytes read to decode a frame if it succeeds, or one of
+ * the following negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include STREAM frame.
+ */
+dwnx_ssize dwnx_frame_decode_stream(dwnx_frame_stream *dest,
+                                    const uint8_t *payload, size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_reset_stream decodes RESET_STREAM frame from
+ * |payload| of length |payloadlen|.  The result is stored in the
+ * object pointed by |dest|.  RESET_STREAM frame must start at
+ * payload[0].  This function finishes when it decodes one
+ * RESET_STREAM frame, and returns the exact number of bytes read to
+ * decode a frame if it succeeds, or one of the following negative
+ * error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include RESET_STREAM frame.
+ */
+dwnx_ssize dwnx_frame_decode_reset_stream(dwnx_frame_reset_stream *dest,
+                                          const uint8_t *payload,
+                                          size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_stop_sending decodes STOP_SENDING frame from
+ * |payload| of length |payloadlen|.  The result is stored in the
+ * object pointed by |dest|.  STOP_SENDING frame must start at
+ * payload[0].  This function finishes when it decodes one
+ * STOP_SENDING frame, and returns the exact number of bytes read to
+ * decode a frame if it succeeds, or one of the following negative
+ * error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include STOP_SENDING frame.
+ */
+dwnx_ssize dwnx_frame_decode_stop_sending(dwnx_frame_stop_sending *dest,
+                                          const uint8_t *payload,
+                                          size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_max_data decodes MAX_DATA frame from |payload| of
+ * length |payloadlen|.  The result is stored in the object pointed by
+ * |dest|.  MAX_DATA frame must start at payload[0].  This function
+ * finishes when it decodes one MAX_DATA frame, and returns the exact
+ * number of bytes read to decode a frame if it succeeds, or one of
+ * the following negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include MAX_DATA frame.
+ */
+dwnx_ssize dwnx_frame_decode_max_data(dwnx_frame_max_data *dest,
+                                      const uint8_t *payload,
+                                      size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_max_stream_data decodes MAX_STREAM_DATA frame
+ * from |payload| of length |payloadlen|.  The result is stored in the
+ * object pointed by |dest|.  MAX_STREAM_DATA frame must start at
+ * payload[0].  This function finishes when it decodes one
+ * MAX_STREAM_DATA frame, and returns the exact number of bytes read
+ * to decode a frame if it succeeds, or one of the following negative
+ * error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include MAX_STREAM_DATA frame.
+ */
+dwnx_ssize dwnx_frame_decode_max_stream_data(dwnx_frame_max_stream_data *dest,
+                                             const uint8_t *payload,
+                                             size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_max_streams decodes MAX_STREAMS frame from
+ * |payload| of length |payloadlen|.  The result is stored in the
+ * object pointed by |dest|.  MAX_STREAMS frame must start at
+ * payload[0].  This function finishes when it decodes one MAX_STREAMS
+ * frame, and returns the exact number of bytes read to decode a frame
+ * if it succeeds, or one of the following negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include MAX_STREAMS frame.
+ */
+dwnx_ssize dwnx_frame_decode_max_streams(dwnx_frame_max_streams *dest,
+                                         const uint8_t *payload,
+                                         size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_data_blocked decodes DATA_BLOCKED frame from
+ * |payload| of length |payloadlen|.  The result is stored in the
+ * object pointed by |dest|.  DATA_BLOCKED frame must start at
+ * payload[0].  This function finishes when it decodes one
+ * DATA_BLOCKED frame, and returns the exact number of bytes read to
+ * decode a frame if it succeeds, or one of the following negative
+ * error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include DATA_BLOCKED frame.
+ */
+dwnx_ssize dwnx_frame_decode_data_blocked(dwnx_frame_data_blocked *dest,
+                                          const uint8_t *payload,
+                                          size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_stream_data_blocked decodes STREAM_DATA_BLOCKED
+ * frame from |payload| of length |payloadlen|.  The result is stored
+ * in the object pointed by |dest|.  STREAM_DATA_BLOCKED frame must
+ * start at payload[0].  This function finishes when it decodes one
+ * STREAM_DATA_BLOCKED frame, and returns the exact number of bytes
+ * read to decode a frame if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include STREAM_DATA_BLOCKED frame.
+ */
+dwnx_ssize
+dwnx_frame_decode_stream_data_blocked(dwnx_frame_stream_data_blocked *dest,
+                                      const uint8_t *payload,
+                                      size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_streams_blocked decodes STREAMS_BLOCKED frame
+ * from |payload| of length |payloadlen|.  The result is stored in the
+ * object pointed by |dest|.  STREAMS_BLOCKED frame must start at
+ * payload[0].  This function finishes when it decodes one
+ * STREAMS_BLOCKED frame, and returns the exact number of bytes read
+ * to decode a frame if it succeeds, or one of the following negative
+ * error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include STREAMS_BLOCKED frame.
+ */
+dwnx_ssize dwnx_frame_decode_streams_blocked(dwnx_frame_streams_blocked *dest,
+                                             const uint8_t *payload,
+                                             size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_connection_close decodes CONNECTION_CLOSE frame
+ * from |payload| of length |payloadlen|.  The result is stored in the
+ * object pointed by |dest|.  CONNECTION_CLOSE frame must start at
+ * payload[0].  This function finishes when it decodes one
+ * CONNECTION_CLOSE frame, and returns the exact number of bytes read
+ * to decode a frame if it succeeds, or one of the following negative
+ * error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include CONNECTION_CLOSE frame.
+ */
+dwnx_ssize dwnx_frame_decode_connection_close(dwnx_frame_connection_close *dest,
+                                              const uint8_t *payload,
+                                              size_t payloadlen);
+
 #endif /* !defined(DWNX_FRAME_H) */

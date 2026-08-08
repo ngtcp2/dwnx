@@ -244,3 +244,665 @@ dwnx_ssize dwnx_frame_encode_max_streams(uint8_t *out, size_t outlen,
 
   return (dwnx_ssize)len;
 }
+
+void dwnx_frd_init(dwnx_frd *frd) { (void)frd; }
+
+dwnx_ssize dwnx_frd_decode(dwnx_frd *frd, dwnx_frame *dest,
+                           const uint8_t *payload, size_t payloadlen) {
+  uint64_t long_type;
+  size_t vintlen;
+  uint8_t type;
+
+  if (payloadlen == 0) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  type = payload[0];
+
+  switch (type) {
+  case DWNX_FRAME_PADDING:
+    return dwnx_frame_decode_padding(&dest->padding, payload, payloadlen);
+  case DWNX_FRAME_RESET_STREAM:
+    return dwnx_frame_decode_reset_stream(&dest->reset_stream, payload,
+                                          payloadlen);
+  case DWNX_FRAME_STOP_SENDING:
+    return dwnx_frame_decode_stop_sending(&dest->stop_sending, payload,
+                                          payloadlen);
+  case DWNX_FRAME_MAX_DATA:
+    return dwnx_frame_decode_max_data(&dest->max_data, payload, payloadlen);
+  case DWNX_FRAME_MAX_STREAM_DATA:
+    return dwnx_frame_decode_max_stream_data(&dest->max_stream_data, payload,
+                                             payloadlen);
+  case DWNX_FRAME_MAX_STREAMS_BIDI:
+  case DWNX_FRAME_MAX_STREAMS_UNI:
+    return dwnx_frame_decode_max_streams(&dest->max_streams, payload,
+                                         payloadlen);
+  case DWNX_FRAME_DATA_BLOCKED:
+    return dwnx_frame_decode_data_blocked(&dest->data_blocked, payload,
+                                          payloadlen);
+  case DWNX_FRAME_STREAM_DATA_BLOCKED:
+    return dwnx_frame_decode_stream_data_blocked(&dest->stream_data_blocked,
+                                                 payload, payloadlen);
+  case DWNX_FRAME_STREAMS_BLOCKED_BIDI:
+  case DWNX_FRAME_STREAMS_BLOCKED_UNI:
+    return dwnx_frame_decode_streams_blocked(&dest->streams_blocked, payload,
+                                             payloadlen);
+  case DWNX_FRAME_CONNECTION_CLOSE:
+  case DWNX_FRAME_CONNECTION_CLOSE_APP:
+    return dwnx_frame_decode_connection_close(&dest->connection_close, payload,
+                                              payloadlen);
+  default:
+    if ((type & ~(DWNX_FRAME_STREAM - 1)) == DWNX_FRAME_STREAM) {
+      dest->stream.data = &frd->buf.data;
+
+      return dwnx_frame_decode_stream(&dest->stream, payload, payloadlen);
+    }
+
+    /* For frame types > 0xFF, use dwnx_get_uvarintlen and
+       dwnx_get_uvarint to get a frame type, and then switch over it.
+       Verify that payloadlen >= dwnx_get_uvarintlen(payload) before
+       calling dwnx_get_uvarint(payload). */
+    vintlen = dwnx_get_uvarintlen(payload);
+    if (vintlen > payloadlen) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    dwnx_get_uvarint(&long_type, payload);
+
+    switch (long_type) {
+    case DWNX_FRAME_QX_TRANSPORT_PARAMETERS:
+      dest->qx_transport_parameters.params = &frd->buf.params;
+
+      return dwnx_frame_decode_qx_transport_parameters(
+        &dest->qx_transport_parameters, payload, payloadlen);
+    case DWNX_FRAME_QX_PING_REQUEST:
+    case DWNX_FRAME_QX_PING_RESPONSE:
+      return dwnx_frame_decode_qx_ping(&dest->qx_ping, payload, payloadlen);
+    default:
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+  }
+}
+
+dwnx_ssize dwnx_frame_decode_padding(dwnx_frame_padding *dest,
+                                     const uint8_t *payload,
+                                     size_t payloadlen) {
+  const uint8_t *p, *ep;
+
+  assert(payloadlen > 0);
+
+  p = payload + 1;
+  ep = payload + payloadlen;
+
+  for (; p != ep && *p == DWNX_FRAME_PADDING; ++p)
+    ;
+
+  dest->type = DWNX_FRAME_PADDING;
+  dest->len = (size_t)(p - payload);
+
+  return (dwnx_ssize)dest->len;
+}
+
+dwnx_ssize dwnx_frame_decode_qx_transport_parameters(
+  dwnx_frame_qx_transport_parameters *dest, const uint8_t *payload,
+  size_t payloadlen) {
+  size_t len = 1 + 1;
+  uint64_t vi;
+  size_t n;
+  size_t paramslen;
+  const uint8_t *p;
+  int rv;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  /* p = */ dwnx_get_uvarint(&vi, p);
+
+  if (payloadlen - len < vi) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  paramslen = (size_t)vi;
+  len += paramslen;
+
+  p = payload;
+
+  p = dwnx_get_uvarint(&dest->type, p);
+  p += n;
+
+  rv = dwnx_transport_params_decode((dwnx_transport_params *)dest->params, p,
+                                    paramslen);
+  if (rv != 0) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += paramslen;
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_qx_ping(dwnx_frame_qx_ping *dest,
+                                     const uint8_t *payload,
+                                     size_t payloadlen) {
+  size_t len = 1 + 1;
+  size_t n;
+  const uint8_t *p;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload;
+
+  p = dwnx_get_uvarint(&dest->type, p);
+  p = dwnx_get_uvarint(&dest->seq, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_stream(dwnx_frame_stream *dest,
+                                    const uint8_t *payload, size_t payloadlen) {
+  uint8_t type;
+  size_t len = 1 + 1;
+  const uint8_t *p;
+  size_t datalen = 0;
+  size_t ndatalen = 0;
+  size_t n;
+  uint64_t vi;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  type = payload[0];
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+
+  if (type & DWNX_STREAM_OFF_BIT) {
+    ++len;
+    if (payloadlen < len) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    n = dwnx_get_uvarintlen(p);
+    len += n - 1;
+
+    if (payloadlen < len) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    p += n;
+  }
+
+  if (type & DWNX_STREAM_LEN_BIT) {
+    ++len;
+    if (payloadlen < len) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    ndatalen = dwnx_get_uvarintlen(p);
+    len += ndatalen - 1;
+
+    if (payloadlen < len) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    /* p = */ dwnx_get_uvarint(&vi, p);
+    if (payloadlen - len < vi) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    datalen = (size_t)vi;
+    len += datalen;
+  } else {
+    len = payloadlen;
+  }
+
+  p = payload + 1;
+
+  dest->type = DWNX_FRAME_STREAM;
+  dest->flags = (uint8_t)(type & ~DWNX_FRAME_STREAM);
+  dest->fin = (type & DWNX_STREAM_FIN_BIT) != 0;
+  p = dwnx_get_varint(&dest->stream_id, p);
+
+  if (type & DWNX_STREAM_OFF_BIT) {
+    p = dwnx_get_uvarint(&dest->offset, p);
+  } else {
+    dest->offset = 0;
+  }
+
+  if (type & DWNX_STREAM_LEN_BIT) {
+    p += ndatalen;
+  } else {
+    datalen = payloadlen - (size_t)(p - payload);
+  }
+
+  dest->len = datalen;
+
+  if (datalen) {
+    *(dwnx_vec *)&dest->data[0] = (dwnx_vec){
+      .base = (uint8_t *)p,
+      .len = datalen,
+    };
+    dest->datacnt = 1;
+    p += datalen;
+  } else {
+    dest->datacnt = 0;
+  }
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_reset_stream(dwnx_frame_reset_stream *dest,
+                                          const uint8_t *payload,
+                                          size_t payloadlen) {
+  size_t len = 1 + 1 + 1 + 1;
+  const uint8_t *p;
+  size_t n;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  dest->type = DWNX_FRAME_RESET_STREAM;
+  p = dwnx_get_varint(&dest->stream_id, p);
+  p = dwnx_get_uvarint(&dest->app_error_code, p);
+  p = dwnx_get_uvarint(&dest->final_size, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_stop_sending(dwnx_frame_stop_sending *dest,
+                                          const uint8_t *payload,
+                                          size_t payloadlen) {
+  size_t len = 1 + 1 + 1;
+  const uint8_t *p;
+  size_t n;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  dest->type = DWNX_FRAME_STOP_SENDING;
+  p = dwnx_get_varint(&dest->stream_id, p);
+  p = dwnx_get_uvarint(&dest->app_error_code, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_max_data(dwnx_frame_max_data *dest,
+                                      const uint8_t *payload,
+                                      size_t payloadlen) {
+  size_t len = 1 + 1;
+  const uint8_t *p;
+  size_t n;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  dest->type = DWNX_FRAME_MAX_DATA;
+  p = dwnx_get_uvarint(&dest->max_data, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_max_stream_data(dwnx_frame_max_stream_data *dest,
+                                             const uint8_t *payload,
+                                             size_t payloadlen) {
+  size_t len = 1 + 1 + 1;
+  const uint8_t *p;
+  size_t n;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  dest->type = DWNX_FRAME_MAX_STREAM_DATA;
+  p = dwnx_get_varint(&dest->stream_id, p);
+  p = dwnx_get_uvarint(&dest->max_stream_data, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_max_streams(dwnx_frame_max_streams *dest,
+                                         const uint8_t *payload,
+                                         size_t payloadlen) {
+  size_t len = 1 + 1;
+  const uint8_t *p;
+  size_t n;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  dest->type = payload[0];
+  p = dwnx_get_uvarint(&dest->max_streams, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_data_blocked(dwnx_frame_data_blocked *dest,
+                                          const uint8_t *payload,
+                                          size_t payloadlen) {
+  size_t len = 1 + 1;
+  const uint8_t *p;
+  size_t n;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  dest->type = DWNX_FRAME_DATA_BLOCKED;
+  p = dwnx_get_uvarint(&dest->offset, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize
+dwnx_frame_decode_stream_data_blocked(dwnx_frame_stream_data_blocked *dest,
+                                      const uint8_t *payload,
+                                      size_t payloadlen) {
+  size_t len = 1 + 1 + 1;
+  const uint8_t *p;
+  size_t n;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  dest->type = DWNX_FRAME_STREAM_DATA_BLOCKED;
+  p = dwnx_get_varint(&dest->stream_id, p);
+  p = dwnx_get_uvarint(&dest->offset, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_streams_blocked(dwnx_frame_streams_blocked *dest,
+                                             const uint8_t *payload,
+                                             size_t payloadlen) {
+  size_t len = 1 + 1;
+  const uint8_t *p;
+  size_t n;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  dest->type = payload[0];
+  p = dwnx_get_uvarint(&dest->max_streams, p);
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_connection_close(dwnx_frame_connection_close *dest,
+                                              const uint8_t *payload,
+                                              size_t payloadlen) {
+  size_t len = 1 + 1 + 1;
+  const uint8_t *p;
+  size_t reasonlen;
+  size_t nreasonlen;
+  size_t n;
+  uint8_t type;
+  uint64_t vi;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  type = payload[0];
+
+  p = payload + 1;
+
+  n = dwnx_get_uvarintlen(p);
+  len += n - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  p += n;
+
+  if (type == DWNX_FRAME_CONNECTION_CLOSE) {
+    ++len;
+
+    n = dwnx_get_uvarintlen(p);
+    len += n - 1;
+
+    if (payloadlen < len) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    p += n;
+  }
+
+  nreasonlen = dwnx_get_uvarintlen(p);
+  len += nreasonlen - 1;
+
+  if (payloadlen < len) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  dwnx_get_uvarint(&vi, p);
+  if (payloadlen - len < vi) {
+    return DWNX_ERR_FRAME_ENCODING;
+  }
+
+  reasonlen = (size_t)vi;
+  len += reasonlen;
+
+  p = payload + 1;
+
+  dest->type = type;
+  p = dwnx_get_uvarint(&dest->error_code, p);
+
+  if (type == DWNX_FRAME_CONNECTION_CLOSE) {
+    p = dwnx_get_uvarint(&dest->frame_type, p);
+  } else {
+    dest->frame_type = 0;
+  }
+
+  dest->reasonlen = reasonlen;
+  p += nreasonlen;
+
+  if (reasonlen == 0) {
+    dest->reason = NULL;
+  } else {
+    dest->reason = (uint8_t *)p;
+    p += reasonlen;
+  }
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
