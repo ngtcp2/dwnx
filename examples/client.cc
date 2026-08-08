@@ -113,15 +113,7 @@ namespace {
 void readcb(struct ev_loop *loop, ev_io *w, int revents) {
   auto c = static_cast<Client *>(w->data);
 
-  if (!c->on_read()) {
-    std::println(stderr, "disconnect");
-
-    c->disconnect();
-    return;
-  }
-
-  if (!c->on_write()) {
-    std::println(stderr, "disconnect2");
+  if (!c->on_read() || !c->on_write()) {
     c->disconnect();
   }
 }
@@ -211,17 +203,6 @@ int recv_stream_data(dwnx_conn *conn, uint32_t flags, int64_t stream_id,
 }
 } // namespace
 
-namespace {
-std::string get_selected_alpn(SSL *ssl) {
-  const unsigned char *alpn = nullptr;
-  unsigned int alpnlen;
-
-  SSL_get0_alpn_selected(ssl, &alpn, &alpnlen);
-
-  return std::string{alpn, alpn + alpnlen};
-}
-} // namespace
-
 std::expected<void, Error> Client::handshake_completed() {
   if (early_data_ && !SSL_early_data_accepted(ssl_)) {
     if (!config.quiet) {
@@ -238,7 +219,8 @@ std::expected<void, Error> Client::handshake_completed() {
     if (!group.empty()) {
       std::println(stderr, "Negotiated group is {}", group);
     }
-    std::println(stderr, "Negotiated ALPN is {}", get_selected_alpn(ssl_));
+    std::println(stderr, "Negotiated ALPN is {}",
+                 util::get_selected_alpn(ssl_));
 
     if (!config.ech_config_list.empty() && SSL_ech_accepted(ssl_)) {
       std::println(stderr, "ECH was accepted");
@@ -399,10 +381,8 @@ std::expected<void, Error> Client::init(int fd, const char *addr,
     // TODO: Do early data
   }
 
-  read_ = &Client::tls_handshake;
-  write_ = &Client::tls_handshake;
+  write_ = &Client::connected;
 
-  start_rev();
   start_wev();
   update_timer();
 
@@ -444,6 +424,21 @@ std::expected<void, Error> Client::init_ssl(SSL_CTX *ssl_ctx,
   return {};
 }
 
+std::expected<void, Error> Client::connected() {
+  if (!util::check_socket_connected(fd_)) {
+    std::println(stderr, "Could not connect to the server");
+
+    return std::unexpected{Error::CONNECT_FAIL};
+  }
+
+  read_ = &Client::tls_handshake;
+  write_ = &Client::tls_handshake;
+
+  start_rev();
+
+  return {};
+}
+
 std::expected<void, Error> Client::tls_handshake() {
   ev_io_stop(loop_, &wev_);
 
@@ -457,15 +452,20 @@ std::expected<void, Error> Client::tls_handshake() {
       return {};
     case SSL_ERROR_WANT_WRITE:
       start_wev();
-      ev_timer_again(loop_, &timer_);
+      update_timer();
       return {};
     default:
+      std::println(stderr, "SSL_do_handshake: {}",
+                   ERR_error_string(ERR_get_error(), NULL));
+
       return std::unexpected{Error::CRYPTO};
     }
   }
 
   read_ = &Client::read_data;
   write_ = &Client::write_data;
+
+  ev_feed_event(loop_, &rev_, EV_READ);
 
   return handshake_completed();
 }
@@ -485,6 +485,7 @@ std::expected<void, Error> Client::feed_data(std::span<const uint8_t> data) {
 
     return std::unexpected{Error::QUIC};
   }
+
   return {};
 }
 
@@ -556,17 +557,26 @@ std::expected<void, Error> Client::write_data() {
 std::expected<void, Error> Client::write_streams() {
   auto buf = std::span{txbuf_};
 
-  auto maybe_data = proto_codec_->write_record(buf, util::timestamp());
-  if (!maybe_data) {
-    return std::unexpected{maybe_data.error()};
-  }
+  for (;;) {
+    auto maybe_data = proto_codec_->write_record(buf, util::timestamp());
+    if (!maybe_data) {
+      return std::unexpected{maybe_data.error()};
+    }
 
-  auto data = *maybe_data;
-  if (data.empty()) {
-    return {};
-  }
+    auto data = *maybe_data;
+    if (data.empty()) {
+      return {};
+    }
 
-  return send_packet_or_blocked(*maybe_data);
+    auto rv = send_packet_or_blocked(*maybe_data);
+    if (!rv) {
+      if (rv.error() == Error::SEND_BLOCKED) {
+        return {};
+      }
+
+      return rv;
+    }
+  }
 }
 
 std::expected<void, Error>
@@ -580,7 +590,7 @@ Client::send_packet_or_blocked(std::span<const uint8_t> data) {
   if (!rest.empty()) {
     on_send_blocked(rest);
 
-    return {};
+    return std::unexpected{Error::SEND_BLOCKED};
   }
 
   return {};
@@ -689,9 +699,6 @@ void Client::on_send_blocked(std::span<const uint8_t> data) {
   start_wev();
 }
 
-void Client::start_rev() { ev_io_start(loop_, &rev_); }
-void Client::start_wev() { ev_io_start(loop_, &wev_); }
-
 std::expected<void, Error> Client::send_blocked_packet() {
   assert(tx_.send_blocked);
 
@@ -715,6 +722,10 @@ std::expected<void, Error> Client::send_blocked_packet() {
 
   return {};
 }
+
+void Client::start_rev() { ev_io_start(loop_, &rev_); }
+
+void Client::start_wev() { ev_io_start(loop_, &wev_); }
 
 std::expected<void, Error> Client::handle_error() { return {}; }
 
@@ -1401,6 +1412,8 @@ int main(int argc, char **argv) {
       util::enable_keylog(ssl_ctx);
     }
   }
+
+  util::ignore_sigpipe();
 
   auto c = Client{EV_DEFAULT};
 

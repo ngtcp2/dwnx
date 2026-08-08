@@ -37,6 +37,7 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <sys/mman.h>
+#include <signal.h>
 
 #include <cassert>
 #include <cstring>
@@ -703,6 +704,16 @@ std::expected<int, Error> create_nonblock_socket(int domain, int type,
   return fd;
 }
 
+bool check_socket_connected(int fd) {
+  int error;
+  socklen_t len = sizeof(error);
+  if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (char *)&error, &len) != 0) {
+    return false;
+  }
+
+  return error == 0;
+}
+
 std::expected<uint32_t, Error> parse_version(std::string_view s) {
   if (!util::istarts_with(s, "0x"sv)) {
     return std::unexpected{Error::INVALID_ARGUMENT};
@@ -874,6 +885,12 @@ std::string format_app_error_code(std::optional<uint64_t> app_error_code) {
   return app_error_code
     .transform([](auto &&r) { return std::format("{:#x}", r); })
     .value_or("(no error)");
+}
+
+void ignore_sigpipe() {
+  struct sigaction act{};
+  act.sa_handler = SIG_IGN;
+  sigaction(SIGPIPE, &act, nullptr);
 }
 
 } // namespace util

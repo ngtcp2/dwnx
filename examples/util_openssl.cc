@@ -169,6 +169,15 @@ void enable_keylog(SSL_CTX *ssl_ctx) {
   SSL_CTX_set_keylog_callback(ssl_ctx, keylog_callback);
 }
 
+std::string get_selected_alpn(SSL *ssl) {
+  const unsigned char *alpn = nullptr;
+  unsigned int alpnlen;
+
+  SSL_get0_alpn_selected(ssl, &alpn, &alpnlen);
+
+  return std::string{alpn, alpn + alpnlen};
+}
+
 } // namespace util
 
 } // namespace dwnx

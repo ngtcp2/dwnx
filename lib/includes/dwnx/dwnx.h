@@ -1205,6 +1205,15 @@ DWNX_EXTERN uint64_t dwnx_conn_get_max_data_left(const dwnx_conn *conn);
 /**
  * @function
  *
+ * `dwnx_conn_get_local_transport_params` returns a pointer to the
+ * local QUIC transport parameters.
+ */
+DWNX_EXTERN const dwnx_transport_params *
+dwnx_conn_get_local_transport_params(const dwnx_conn *conn);
+
+/**
+ * @function
+ *
  * `dwnx_strerror` returns the text representation of |liberr|.
  * |liberr| must be one of dwnx library error codes (which is defined
  * as :macro:`DWNX_ERR_* <DWNX_ERR_INVALID_ARGUMENT>` macros).

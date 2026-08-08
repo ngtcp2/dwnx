@@ -514,6 +514,8 @@ std::expected<void, Error> make_socket_nodelay(int fd);
 std::expected<int, Error> create_nonblock_socket(int domain, int type,
                                                  int protocol);
 
+bool check_socket_connected(int fd);
+
 std::expected<std::vector<uint8_t>, Error>
 read_token(const std::filesystem::path &path);
 std::expected<void, Error> write_token(const std::filesystem::path &path,
@@ -589,9 +591,13 @@ std::filesystem::path realpath(const std::filesystem::path &path);
 // format_app_error_code formats |app_error_code|.
 std::string format_app_error_code(std::optional<uint64_t> app_error_code);
 
+void ignore_sigpipe();
+
 extern std::ofstream keylog_file;
 
 void enable_keylog(SSL_CTX *ssl_ctx);
+
+std::string get_selected_alpn(SSL *ssl);
 
 } // namespace util
 

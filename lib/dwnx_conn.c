@@ -1494,10 +1494,12 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
           return DWNX_ERR_FRAME_ENCODING;
         }
 
+        rcrd->fr.stream.offset = 0;
         rcrd->state = DWNX_RECORD_READ_STATE_STREAM_LENGTH;
 
         break;
       } else {
+        rcrd->fr.stream.offset = 0;
         rcrd->fr.stream.len = rcrd->record_left;
         rcrd->field_left = rcrd->fr.stream.len;
 
@@ -2732,6 +2734,11 @@ dwnx_tstamp dwnx_conn_get_timestamp(const dwnx_conn *conn) {
 
 uint64_t dwnx_conn_get_max_data_left(const dwnx_conn *conn) {
   return conn->tx.max_offset - conn->tx.offset;
+}
+
+const dwnx_transport_params *
+dwnx_conn_get_local_transport_params(const dwnx_conn *conn) {
+  return &conn->local.transport_params;
 }
 
 static void ccerr_init(dwnx_ccerr *ccerr, dwnx_ccerr_type type,

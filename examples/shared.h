@@ -73,6 +73,8 @@ enum class Error {
   SEND_BLOCKED,
   // QUIC connection is in close-wait.
   CLOSE_WAIT,
+  // Connection cannot be established.
+  CONNECT_FAIL,
 };
 
 enum class AppProtocol {
@@ -213,6 +215,9 @@ struct std::formatter<dwnx::Error> : public std::formatter<std::string_view> {
       break;
     case dwnx::Error::CLOSE_WAIT:
       s = "close wait"sv;
+      break;
+    case dwnx::Error::CONNECT_FAIL:
+      s = "connect fail"sv;
       break;
     }
 

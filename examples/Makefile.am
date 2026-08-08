@@ -41,6 +41,16 @@ LDADD = $(top_builddir)/lib/libdwnx.la \
 	@OPENSSL_LIBS@ \
 	@JEMALLOC_LIBS@
 
+SERVER_SRCS = \
+	server_base.cc server_base.h \
+	template.h \
+	debug.cc debug.h \
+	util.cc util.h \
+	util_openssl.cc \
+	shared.cc shared.h \
+	http.cc http.h \
+	network.h
+
 CLIENT_BASE_SRCS = \
 	client_base.cc client_base.h \
 	template.h \
@@ -50,10 +60,15 @@ CLIENT_BASE_SRCS = \
 	shared.cc shared.h \
 	network.h
 
-noinst_PROGRAMS = h3client
+noinst_PROGRAMS = h3client h3server
+
+h3server_CPPFLAGS = ${AM_CPPFLAGS} -DWITH_EXAMPLE_HTTP3_PROTO_CODEC
+h3server_SOURCES = \
+	${SERVER_SRCS} \
+	server.cc server.h \
+	http3_server_proto_codec.cc http3_server_proto_codec.h
 
 h3client_CPPFLAGS = ${AM_CPPFLAGS} -DWITH_EXAMPLE_HTTP3_PROTO_CODEC
-
 h3client_SOURCES = \
 	${CLIENT_BASE_SRCS} \
 	client.cc client.h \

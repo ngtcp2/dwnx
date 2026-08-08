@@ -93,6 +93,7 @@ public:
   std::expected<void, Error> on_read();
   std::expected<void, Error> on_write();
 
+  std::expected<void, Error> connected();
   std::expected<void, Error> tls_handshake();
   std::expected<void, Error> read_data();
   std::expected<void, Error> write_data();

@@ -89,18 +89,17 @@ static void record_reader_next_frame(dwnx_record_reader *rcrd,
   }
 
   rcrd->state = DWNX_RECORD_READ_STATE_FRAME_TYPE;
+  rcrd->field_left = 0;
 }
 
 void dwnx_record_reader_reset(dwnx_record_reader *rcrd, const dwnx_mem *mem) {
-  if (rcrd->record_left) {
-    record_reader_next_frame(rcrd, mem);
+  record_reader_next_frame(rcrd, mem);
 
+  if (rcrd->record_left) {
     return;
   }
 
-  dwnx_mem_free(mem, rcrd->buf.begin);
-
-  *rcrd = (dwnx_record_reader){0};
+  rcrd->state = DWNX_RECORD_READ_STATE_RECORD_SIZE;
 }
 
 size_t dwnx_record_reader_avail(dwnx_record_reader *rcrd, size_t len) {

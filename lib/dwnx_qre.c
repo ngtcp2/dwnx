@@ -99,6 +99,8 @@ int dwnx_qre_encode_frame(dwnx_qre *qre, const dwnx_frame *fr) {
 size_t dwnx_qre_final(dwnx_qre *qre) {
   size_t len;
 
+  qre->flags &= ~DWNX_QRE_FLAG_STARTED;
+
   len = dwnx_buf_len(&qre->buf);
   if (len == DWNX_QRE_RECORDLEN_SIZE) {
     return 0;
@@ -108,8 +110,6 @@ size_t dwnx_qre_final(dwnx_qre *qre) {
                     DWNX_QRE_RECORDLEN_SIZE);
 
   dwnx_log_tx_rcd(qre->log, len - DWNX_QRE_RECORDLEN_SIZE);
-
-  qre->flags &= ~DWNX_QRE_FLAG_STARTED;
 
   return len;
 }
