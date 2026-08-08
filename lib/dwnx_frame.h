@@ -150,7 +150,7 @@ typedef struct dwnx_frame_connection_close {
      DWNX_FRAME_CONNECTION_CLOSE */
   uint64_t frame_type;
   size_t reasonlen;
-  uint8_t *reason;
+  const uint8_t *reason;
 } dwnx_frame_connection_close;
 
 typedef union dwnx_frame {

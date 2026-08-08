@@ -22,8 +22,8 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#ifndef DWNX_QRE_H
-#define DWNX_QRE_H
+#ifndef DWNX_SETTINGS_H
+#define DWNX_SETTINGS_H
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -31,34 +31,4 @@
 
 #include <dwnx/dwnx.h>
 
-#include "dwnx_buf.h"
-#include "dwnx_frame.h"
-
-#define DWNX_QRE_FLAG_NONE 0x00U
-/* DWNX_QRE_FLAG_STARTED indicates that the encoding has started. */
-#define DWNX_QRE_FLAG_STARTED 0x01U
-
-typedef struct dwnx_log dwnx_log;
-
-typedef struct dwnx_qre {
-  dwnx_buf buf;
-  dwnx_log *log;
-  uint32_t flags;
-} dwnx_qre;
-
-void dwnx_qre_init(dwnx_qre *qre, dwnx_log *log);
-
-void dwnx_qre_start(dwnx_qre *qre, uint8_t *buf, size_t buflen);
-
-int dwnx_qre_has_started(const dwnx_qre *qre);
-
-dwnx_ssize dwnx_qre_stream_max_datalen(const dwnx_qre *qre, int64_t stream_id,
-                                       uint64_t offset, uint64_t len);
-
-int dwnx_qre_encode_frame(dwnx_qre *qre, const dwnx_frame *fr);
-
-size_t dwnx_qre_final(dwnx_qre *qre);
-
-size_t dwnx_qre_left(const dwnx_qre *qre);
-
-#endif /* !defined(DWNX_QRE_H) */
+#endif /* !defined(DWNX_SETTINGS_H) */

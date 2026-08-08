@@ -25,6 +25,7 @@
 #include "dwnx_conn_test.h"
 
 #include <stdio.h>
+#include <unistd.h>
 
 #include "dwnx_conn.h"
 #include "dwnx_conv.h"
@@ -100,6 +101,7 @@ typedef struct userdata {
 } userdata;
 
 typedef struct conn_options {
+  const dwnx_settings *settings;
   const dwnx_callbacks *callbacks;
   const dwnx_transport_params *params;
   const dwnx_mem *mem;
@@ -207,6 +209,18 @@ static int extend_max_local_streams_uni(dwnx_conn *conn, uint64_t max_streams,
   return 0;
 }
 
+static void log_write(void *user_data, char *msg, size_t len) {
+  (void)user_data;
+
+  msg[len] = '\n';
+  write(fileno(stderr), msg, len + 1);
+}
+
+static void server_default_settings(dwnx_settings *settings) {
+  dwnx_settings_default(settings);
+  settings->log_write = log_write;
+}
+
 static void server_default_transport_params(dwnx_transport_params *params) {
   dwnx_transport_params_default(params);
   params->initial_max_streams_bidi = 10;
@@ -219,9 +233,15 @@ static void server_default_transport_params(dwnx_transport_params *params) {
 
 static void setup_default_server_with_options(dwnx_conn **pconn,
                                               conn_options opts) {
+  dwnx_settings settings;
   dwnx_callbacks callbacks = {0};
   dwnx_transport_params params;
   int rv;
+
+  if (!opts.settings) {
+    server_default_settings(&settings);
+    opts.settings = &settings;
+  }
 
   if (!opts.callbacks) {
     opts.callbacks = &callbacks;
@@ -232,14 +252,19 @@ static void setup_default_server_with_options(dwnx_conn **pconn,
     opts.params = &params;
   }
 
-  rv = dwnx_conn_server_new(pconn, opts.callbacks, opts.params, opts.mem,
-                            opts.user_data);
+  rv = dwnx_conn_server_new(pconn, opts.settings, opts.callbacks, opts.params,
+                            opts.mem, opts.user_data);
 
   assert_int(0, ==, rv);
 }
 
 static void setup_default_server(dwnx_conn **pconn) {
   setup_default_server_with_options(pconn, (conn_options){0});
+}
+
+static void client_default_settings(dwnx_settings *settings) {
+  dwnx_settings_default(settings);
+  settings->log_write = log_write;
 }
 
 static void client_default_transport_params(dwnx_transport_params *params) {
@@ -254,9 +279,15 @@ static void client_default_transport_params(dwnx_transport_params *params) {
 
 static void setup_default_client_with_options(dwnx_conn **pconn,
                                               conn_options opts) {
+  dwnx_settings settings;
   dwnx_callbacks callbacks = {0};
   dwnx_transport_params params;
   int rv;
+
+  if (!opts.settings) {
+    client_default_settings(&settings);
+    opts.settings = &settings;
+  }
 
   if (!opts.callbacks) {
     opts.callbacks = &callbacks;
@@ -267,8 +298,8 @@ static void setup_default_client_with_options(dwnx_conn **pconn,
     opts.params = &params;
   }
 
-  rv = dwnx_conn_client_new(pconn, opts.callbacks, opts.params, opts.mem,
-                            opts.user_data);
+  rv = dwnx_conn_client_new(pconn, opts.settings, opts.callbacks, opts.params,
+                            opts.mem, opts.user_data);
 
   assert_int(0, ==, rv);
 }

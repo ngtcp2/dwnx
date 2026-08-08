@@ -269,11 +269,16 @@ static int cycle_less(const dwnx_pq_entry *lhs, const dwnx_pq_entry *rhs) {
   return rs->cycle - ls->cycle <= 1;
 }
 
-static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
+static int conn_new(dwnx_conn **pconn, const dwnx_settings *settings,
+                    const dwnx_callbacks *callbacks,
                     const dwnx_transport_params *params, const dwnx_mem *mem,
                     void *user_data) {
+  void *ptr;
   dwnx_conn *conn;
+  char *logbuf;
 
+  assert(settings);
+  assert(callbacks);
   assert(params);
   assert(params->initial_max_stream_data_bidi_local <= DWNX_MAX_VARINT);
   assert(params->initial_max_stream_data_bidi_remote <= DWNX_MAX_VARINT);
@@ -289,12 +294,17 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
     mem = dwnx_mem_default();
   }
 
-  conn = dwnx_mem_calloc(mem, 1, sizeof(*conn));
-  if (!conn) {
+  ptr = dwnx_mem_calloc(mem, 1, sizeof(*conn) + DWNX_LOG_BUFLEN);
+  if (!ptr) {
     return DWNX_ERR_NOBUF;
   }
 
+  conn = ptr;
+  logbuf = (char *)ptr + sizeof(*conn);
+
   conn->mem = mem;
+  conn->settings = *settings;
+  settings = &conn->settings;
   conn->callbacks = *callbacks;
   conn->local.transport_params = *params;
   /* We do not let application increase max record size. */
@@ -310,7 +320,9 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   dwnx_idtr_init(&conn->bidi.idtr, mem);
   dwnx_idtr_init(&conn->uni.idtr, mem);
   dwnx_pq_init(&conn->tx.strmq, cycle_less, mem);
-  dwnx_qre_init(&conn->tx.qre);
+  dwnx_log_init(&conn->log, settings->conn_id, settings->log_write, logbuf,
+                settings->initial_ts, user_data);
+  dwnx_qre_init(&conn->tx.qre, &conn->log);
 
   /* Apply flow control limits */
   conn->rx.window = conn->rx.unsent_max_offset = conn->rx.max_offset =
@@ -326,12 +338,13 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   return 0;
 }
 
-int dwnx_conn_server_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
+int dwnx_conn_server_new(dwnx_conn **pconn, const dwnx_settings *settings,
+                         const dwnx_callbacks *callbacks,
                          const dwnx_transport_params *params,
                          const dwnx_mem *mem, void *user_data) {
   int rv;
 
-  rv = conn_new(pconn, callbacks, params, mem, user_data);
+  rv = conn_new(pconn, settings, callbacks, params, mem, user_data);
   if (rv != 0) {
     return rv;
   }
@@ -343,12 +356,13 @@ int dwnx_conn_server_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   return 0;
 }
 
-int dwnx_conn_client_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
+int dwnx_conn_client_new(dwnx_conn **pconn, const dwnx_settings *settings,
+                         const dwnx_callbacks *callbacks,
                          const dwnx_transport_params *params,
                          const dwnx_mem *mem, void *user_data) {
   int rv;
 
-  rv = conn_new(pconn, callbacks, params, mem, user_data);
+  rv = conn_new(pconn, settings, callbacks, params, mem, user_data);
   if (rv != 0) {
     return rv;
   }
@@ -378,12 +392,19 @@ void dwnx_conn_del(dwnx_conn *conn) {
 
   mem = conn->mem;
 
+  dwnx_record_reader_reset(&conn->rx.rcrd, mem);
   dwnx_pq_free(&conn->tx.strmq);
   dwnx_idtr_free(&conn->uni.idtr);
   dwnx_idtr_free(&conn->bidi.idtr);
   dwnx_map_each(&conn->strms, delete_strm, conn);
   dwnx_map_free(&conn->strms);
   dwnx_mem_free(mem, conn);
+}
+
+static void conn_update_timestamp(dwnx_conn *conn, dwnx_tstamp ts) {
+  assert(conn->log.last_ts <= ts);
+
+  conn->log.last_ts = ts;
 }
 
 /*
@@ -622,6 +643,9 @@ static int conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
   }
 
   remote_params = &conn->remote.transport_params;
+
+  conn->rx.rcrd.fr.qx_transport_parameters.params = remote_params;
+  dwnx_log_rx_fr(&conn->log, &conn->rx.rcrd.fr);
 
   if (remote_params->max_record_size < DWNX_DEFAULT_MAX_RECORD_SIZE) {
     return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
@@ -1075,6 +1099,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
   uint64_t vint;
   (void)ts;
 
+  conn_update_timestamp(conn, ts);
+
   if (datalen == 0) {
     return 0;
   }
@@ -1107,6 +1133,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       rcrd->record_left = vint;
       rcrd->state = DWNX_RECORD_READ_STATE_FRAME_TYPE;
+
+      dwnx_log_rx_rcd(&conn->log, rcrd->record_left);
 
       if (p == end) {
         return 0;
@@ -1162,9 +1190,13 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
         break;
       case DWNX_FRAME_PADDING:
+        rcrd->fr.padding.len = 1;
+
         for (; p != end && rcrd->record_left && *p == DWNX_FRAME_PADDING;
-             ++p, --rcrd->record_left)
+             ++p, --rcrd->record_left, ++rcrd->fr.padding.len)
           ;
+
+        dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
         goto frame_done;
       case DWNX_FRAME_RESET_STREAM:
@@ -1364,6 +1396,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       rcrd->fr.qx_ping.seq = vird->acc;
       dwnx_varint_reader_reset(vird);
 
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
       rv = conn_recv_qx_ping(conn, &rcrd->fr.qx_ping, ts);
       if (rv != 0) {
         return rv;
@@ -1404,6 +1438,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       } else {
         rcrd->fr.stream.len = rcrd->record_left;
         rcrd->field_left = rcrd->fr.stream.len;
+
+        dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
         rv = conn_recv_stream(conn, &rcrd->fr.stream, ts);
         if (rv != 0) {
@@ -1451,6 +1487,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         rcrd->fr.stream.len = rcrd->record_left;
         rcrd->field_left = rcrd->fr.stream.len;
 
+        dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
         rv = conn_recv_stream(conn, &rcrd->fr.stream, ts);
         if (rv != 0) {
           return rv;
@@ -1493,6 +1531,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       rcrd->fr.stream.len = vint;
       rcrd->field_left = rcrd->fr.stream.len;
+
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
       rv = conn_recv_stream(conn, &rcrd->fr.stream, ts);
       if (rv != 0) {
@@ -1613,6 +1653,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       rcrd->fr.reset_stream.final_size = vird->acc;
       dwnx_varint_reader_reset(vird);
 
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
       rv = conn_recv_reset_stream(conn, &rcrd->fr.reset_stream, ts);
       if (rv != 0) {
         return rv;
@@ -1664,6 +1706,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       rcrd->fr.stop_sending.app_error_code = vird->acc;
       dwnx_varint_reader_reset(vird);
 
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
       rv = conn_recv_stop_sending(conn, &rcrd->fr.stop_sending, ts);
       if (rv != 0) {
         return rv;
@@ -1686,6 +1730,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       rcrd->fr.max_data.max_data = vird->acc;
       dwnx_varint_reader_reset(vird);
+
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
       rv = conn_recv_max_data(conn, &rcrd->fr.max_data, ts);
       if (rv != 0) {
@@ -1738,6 +1784,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       rcrd->fr.max_stream_data.max_stream_data = vird->acc;
       dwnx_varint_reader_reset(vird);
 
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
       rv = conn_recv_max_stream_data(conn, &rcrd->fr.max_stream_data, ts);
       if (rv != 0) {
         return rv;
@@ -1761,6 +1809,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       rcrd->fr.max_streams.max_streams = vird->acc;
       dwnx_varint_reader_reset(vird);
 
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
       rv = conn_recv_max_streams(conn, &rcrd->fr.max_streams, ts);
       if (rv != 0) {
         return rv;
@@ -1783,6 +1833,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       rcrd->fr.data_blocked.offset = vird->acc;
       dwnx_varint_reader_reset(vird);
+
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
       /* TODO: Process DATA_BLOCKED */
 
@@ -1832,6 +1884,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       rcrd->fr.stream_data_blocked.offset = vird->acc;
       dwnx_varint_reader_reset(vird);
 
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
       /* TODO: Process STREAM_DATA_BLOCKED */
 
       goto frame_done;
@@ -1851,6 +1905,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       rcrd->fr.streams_blocked.max_streams = vird->acc;
       dwnx_varint_reader_reset(vird);
+
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
       /* TODO: Process STREAMS_BLOCKED */
 
@@ -1940,12 +1996,23 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       if (p + rcrd->fr.connection_close.reasonlen <= end) {
         /* reason is fit within [p..end) */
+        rcrd->fr.connection_close.reason = p;
+
+        dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
         rcrd->state = DWNX_RECORD_READ_STATE_DRAINING;
 
         return DWNX_ERR_DRAINING;
       }
 
-      rcrd->field_left = rcrd->fr.connection_close.reasonlen;
+      buf = dwnx_mem_malloc(mem, rcrd->fr.connection_close.reasonlen);
+      if (!buf) {
+        return DWNX_ERR_NOMEM;
+      }
+
+      dwnx_buf_init(&rcrd->buf, buf, rcrd->fr.connection_close.reasonlen);
+      rcrd->fr.connection_close.reason = buf;
+
       rcrd->state = DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASON;
 
       if (p == end) {
@@ -1954,15 +2021,17 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       /* Fall through */
     case DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASON:
-      len = dwnx_record_reader_field_avail(rcrd, (size_t)(end - p));
+      len = dwnx_record_reader_buf_avail(rcrd, (size_t)(end - p));
+      rcrd->buf.last = dwnx_cpymem(rcrd->buf.last, p, len);
 
       p += len;
       rcrd->record_left -= len;
-      rcrd->field_left -= len;
 
-      if (rcrd->field_left) {
+      if (dwnx_buf_left(&rcrd->buf)) {
         return 0;
       }
+
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
       rcrd->state = DWNX_RECORD_READ_STATE_DRAINING;
 
@@ -2295,6 +2364,8 @@ dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
   dwnx_vmsg vmsg, *pvmsg;
   dwnx_strm *strm;
   int64_t datalen;
+
+  conn_update_timestamp(conn, ts);
 
   if (pdatalen) {
     *pdatalen = -1;

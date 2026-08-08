@@ -25,10 +25,15 @@
 #include "dwnx_qre.h"
 #include "dwnx_conv.h"
 #include "dwnx_macro.h"
+#include "dwnx_log.h"
 
 #define DWNX_QRE_RECORDLEN_SIZE 2
 
-void dwnx_qre_init(dwnx_qre *qre) { *qre = (dwnx_qre){0}; }
+void dwnx_qre_init(dwnx_qre *qre, dwnx_log *log) {
+  *qre = (dwnx_qre){
+    .log = log,
+  };
+}
 
 void dwnx_qre_start(dwnx_qre *qre, uint8_t *buf, size_t buflen) {
   qre->flags |= DWNX_QRE_FLAG_STARTED;
@@ -84,6 +89,8 @@ int dwnx_qre_encode_frame(dwnx_qre *qre, const dwnx_frame *fr) {
     return (int)nwrite;
   }
 
+  dwnx_log_tx_fr(qre->log, fr);
+
   qre->buf.last += nwrite;
 
   return 0;
@@ -99,6 +106,8 @@ size_t dwnx_qre_final(dwnx_qre *qre) {
 
   dwnx_put_uvarintw(qre->buf.begin, len - DWNX_QRE_RECORDLEN_SIZE,
                     DWNX_QRE_RECORDLEN_SIZE);
+
+  dwnx_log_tx_rcd(qre->log, len - DWNX_QRE_RECORDLEN_SIZE);
 
   qre->flags &= ~DWNX_QRE_FLAG_STARTED;
 

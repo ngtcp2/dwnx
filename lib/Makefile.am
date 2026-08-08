@@ -38,10 +38,12 @@ OBJECTS = \
 	dwnx_conn.c \
 	dwnx_conv.c \
 	dwnx_err.c \
+	dwnx_fmt.c \
 	dwnx_frame.c \
 	dwnx_gaptr.c \
 	dwnx_idtr.c \
 	dwnx_ksl.c \
+	dwnx_log.c \
 	dwnx_map.c \
 	dwnx_mem.c \
 	dwnx_objalloc.c \
@@ -50,6 +52,7 @@ OBJECTS = \
 	dwnx_qre.c \
 	dwnx_range.c \
 	dwnx_record_reader.c \
+	dwnx_settings.c \
 	dwnx_str.c \
 	dwnx_strm.c \
 	dwnx_transport_params.c \
@@ -62,10 +65,12 @@ HFILES = \
 	dwnx_conn.h \
 	dwnx_conv.h \
 	dwnx_err.h \
+	dwnx_fmt.h \
 	dwnx_frame.h \
 	dwnx_gaptr.h \
 	dwnx_idtr.h \
 	dwnx_ksl.h \
+	dwnx_log.h \
 	dwnx_map.h \
 	dwnx_mem.h \
 	dwnx_net.h\
@@ -75,6 +80,7 @@ HFILES = \
 	dwnx_qre.h \
 	dwnx_range.h \
 	dwnx_record_reader.h \
+	dwnx_settings.h \
 	dwnx_str.h \
 	dwnx_strm.h \
 	dwnx_transport_params.h \

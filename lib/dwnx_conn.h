@@ -36,6 +36,7 @@
 #include "dwnx_idtr.h"
 #include "dwnx_pq.h"
 #include "dwnx_qre.h"
+#include "dwnx_log.h"
 
 #define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SEEN 0x01U
 #define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SENT 0x02U
@@ -140,8 +141,10 @@ struct dwnx_conn {
     } uni;
   } tx;
 
+  dwnx_settings settings;
   dwnx_callbacks callbacks;
   dwnx_map strms;
+  dwnx_log log;
   uint32_t flags;
   int server;
 };

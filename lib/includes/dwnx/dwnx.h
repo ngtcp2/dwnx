@@ -616,6 +616,27 @@ DWNX_EXTERN void dwnx_transport_params_default(dwnx_transport_params *params);
 typedef struct dwnx_conn dwnx_conn;
 
 /**
+ * @functypedef
+ *
+ * :type:`dwnx_log_write` is a callback function for logging.
+ * |user_data| is the same object passed to `dwnx_conn_client_new` or
+ * `dwnx_conn_server_new`.  The caller guarantees that the memory
+ * region [|msg|, |msg| + |len|], inclusive, are writable, and
+ * |msg|[|len|] == '\0'.  If application needs to emit a single line
+ * with a line terminator, one can do msg[len] = '\n', and write |len|
+ * + 1 bytes from |msg|.
+ */
+typedef void (*dwnx_log_write)(void *user_data, char *msg, size_t len);
+
+typedef struct dwnx_settings {
+  uint64_t conn_id;
+  dwnx_tstamp initial_ts;
+  dwnx_log_write log_write;
+} dwnx_settings;
+
+DWNX_EXTERN void dwnx_settings_default(dwnx_settings *settings);
+
+/**
  * @macrosection
  *
  * STREAM frame data flags
@@ -895,11 +916,13 @@ typedef struct dwnx_callbacks {
 } dwnx_callbacks;
 
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
+                                     const dwnx_settings *settings,
                                      const dwnx_callbacks *callbacks,
                                      const dwnx_transport_params *params,
                                      const dwnx_mem *mem, void *user_data);
 
 DWNX_EXTERN int dwnx_conn_client_new(dwnx_conn **pconn,
+                                     const dwnx_settings *settings,
                                      const dwnx_callbacks *callbacks,
                                      const dwnx_transport_params *params,
                                      const dwnx_mem *mem, void *user_data);
