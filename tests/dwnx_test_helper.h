@@ -46,4 +46,7 @@ void dwnx_read_transport_params(dwnx_conn *conn,
                                 const dwnx_frame_qx_transport_parameters *fr,
                                 dwnx_tstamp ts);
 
+const uint8_t *dwnx_read_recordlen(uint64_t *plen, const uint8_t *data,
+                                   size_t datalen);
+
 #endif /* !defined(DWNX_TEST_HELPER_H) */

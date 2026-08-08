@@ -56,4 +56,6 @@ int dwnx_qre_encode_frame(dwnx_qre *qre, const dwnx_frame *fr);
 
 size_t dwnx_qre_final(dwnx_qre *qre);
 
+size_t dwnx_qre_left(const dwnx_qre *qre);
+
 #endif /* !defined(DWNX_QRE_H) */

@@ -104,3 +104,5 @@ size_t dwnx_qre_final(dwnx_qre *qre) {
 
   return len;
 }
+
+size_t dwnx_qre_left(const dwnx_qre *qre) { return dwnx_buf_left(&qre->buf); }

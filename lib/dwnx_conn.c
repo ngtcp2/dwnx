@@ -2273,6 +2273,20 @@ uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn) {
   return n > conn->tx.uni.max_streams ? 0 : conn->tx.uni.max_streams - n + 1;
 }
 
+dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
+                                  size_t destlen, dwnx_ssize *pdatalen,
+                                  uint32_t flags, int64_t stream_id,
+                                  const uint8_t *data, size_t datalen,
+                                  dwnx_tstamp ts) {
+  return dwnx_conn_writev_stream(conn, dest, destlen, pdatalen, flags,
+                                 stream_id,
+                                 &(dwnx_vec){
+                                   .base = (uint8_t *)data,
+                                   .len = datalen,
+                                 },
+                                 datalen != 0, ts);
+}
+
 dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
                                    size_t destlen, dwnx_ssize *pdatalen,
                                    uint32_t flags, int64_t stream_id,
@@ -2366,10 +2380,10 @@ dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
     if (rv < 0 && rv != DWNX_ERR_NOBUF) {
       return rv;
     }
-  }
 
-  if (rv == 0) {
-    return DWNX_ERR_WRITE_MORE;
+    if (rv == 0 && dwnx_qre_left(&conn->tx.qre)) {
+      return DWNX_ERR_WRITE_MORE;
+    }
   }
 
   return (dwnx_ssize)dwnx_qre_final(&conn->tx.qre);

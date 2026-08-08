@@ -1134,6 +1134,12 @@ dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
                                    const dwnx_vec *datav, size_t datavcnt,
                                    dwnx_tstamp ts);
 
+dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
+                                  size_t destlen, dwnx_ssize *pdatalen,
+                                  uint32_t flags, int64_t stream_id,
+                                  const uint8_t *data, size_t datalen,
+                                  dwnx_tstamp ts);
+
 /**
  * @function
  *

@@ -191,3 +191,16 @@ void dwnx_read_transport_params(dwnx_conn *conn,
               conn->rx.rcrd.state);
   assert_size(0, ==, conn->rx.rcrd.record_left);
 }
+
+const uint8_t *dwnx_read_recordlen(uint64_t *plen, const uint8_t *data,
+                                   size_t datalen) {
+  size_t n;
+
+  assert_size(0, !=, datalen);
+
+  n = dwnx_get_uvarintlen(data);
+
+  assert_size(datalen, >=, n);
+
+  return dwnx_get_uvarint(plen, data);
+}
