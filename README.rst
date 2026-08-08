@@ -1,4 +1,4 @@
 dwnx
 ====
 
-dwnx is a QMux implementation in C.
+dwnx (pronounced "down-mix") is a QMux implementation in C.
