@@ -805,8 +805,8 @@ static int conn_recv_stream(dwnx_conn *conn, const dwnx_frame_stream *fr,
     if (fr->len == 0) {
       dwnx_strm_shutdown(strm, DWNX_STRM_FLAG_SHUT_RD);
 
-      rv = conn_call_recv_stream_data(conn, strm, DWNX_STREAM_DATA_FLAG_FIN,
-                                      fr->offset, NULL, 0);
+      rv = conn_call_recv_stream_data(conn, strm, /* fin = */ 1, fr->offset,
+                                      NULL, 0);
       if (rv != 0) {
         return rv;
       }
