@@ -221,6 +221,8 @@ int dwnx_conn_write_transport_params(dwnx_conn *conn, dwnx_tstamp ts);
 
 int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts);
 
+int dwnx_conn_write_max_streams(dwnx_conn *conn, dwnx_tstamp ts);
+
 int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
                                  dwnx_strm *strm, uint32_t flags,
                                  const dwnx_vec *datav, size_t datavcnt,
