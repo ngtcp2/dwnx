@@ -1252,6 +1252,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
         break;
       case DWNX_FRAME_PADDING:
+        rcrd->fr.padding.type = DWNX_FRAME_PADDING;
         rcrd->fr.padding.len = 1;
 
         for (; p != end && rcrd->record_left && *p == DWNX_FRAME_PADDING;
