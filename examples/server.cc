@@ -732,7 +732,7 @@ Handler::send_packet(std::span<const uint8_t> data) {
     switch (err) {
     case SSL_ERROR_WANT_WRITE:
       start_wev();
-      return {};
+      return data;
     case SSL_ERROR_WANT_READ:
       // renegotiation started
     default:
