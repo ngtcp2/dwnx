@@ -2508,15 +2508,15 @@ dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
     rv = dwnx_conn_write_stream_frame(
       conn, vmsg->stream.pdatalen, vmsg->stream.strm, vmsg->stream.flags,
       vmsg->stream.data, vmsg->stream.datacnt, ts);
+    /* vmsg->stream.strm may be deleted */
     if (rv < 0 && rv != DWNX_ERR_NOBUF) {
       return rv;
     }
 
-    if (rv == 0 && dwnx_qre_left(&conn->tx.qre)) {
+    if (rv == 0 && dwnx_qre_left(&conn->tx.qre) &&
+        dwnx_conn_get_max_data_left(conn)) {
       return DWNX_ERR_WRITE_MORE;
     }
-
-    /* vmsg->stream.strm may be deleted */
   }
 
   rv = dwnx_conn_write_max_streams(conn, ts);
