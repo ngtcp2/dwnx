@@ -178,6 +178,41 @@ std::string get_selected_alpn(SSL *ssl) {
   return std::string{alpn, alpn + alpnlen};
 }
 
+bool get_early_data_accepted(SSL *ssl) {
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+  return SSL_early_data_accepted(ssl);
+#else  // !defined(OPENSSL_IS_BORINGSSL) && !defined(OPENSSL_IS_AWSLC)
+  // SSL_get_early_data_status works after handshake completes.
+  return SSL_get_early_data_status(ssl) == SSL_EARLY_DATA_ACCEPTED;
+#endif // !defined(OPENSSL_IS_BORINGSSL) && !defined(OPENSSL_IS_AWSLC)
+}
+
+std::optional<std::string_view> get_negotiated_group(SSL *ssl) {
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+  auto group = std::string_view{SSL_get_group_name(SSL_get_group_id(ssl))};
+  if (group.empty()) {
+    return std::nullopt;
+  }
+
+  return group;
+#else  // !defined(OPENSSL_IS_BORINGSSL) && !defined(OPENSSL_IS_AWSLC)
+  auto name = SSL_get0_group_name(ssl);
+  if (!name) {
+    return std::nullopt;
+  }
+
+  return name;
+#endif // !defined(OPENSSL_IS_BORINGSSL) && !defined(OPENSSL_IS_AWSLC)
+}
+
+bool get_ech_accepted(SSL *ssl) {
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+  return SSL_ech_accepted(ssl);
+#else  // !defined(OPENSSL_IS_BORINGSSL) && !defined(OPENSSL_IS_AWSLC)
+  return false;
+#endif // !defined(OPENSSL_IS_BORINGSSL) && !defined(OPENSSL_IS_AWSLC)
+}
+
 } // namespace util
 
 } // namespace dwnx

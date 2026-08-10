@@ -44,6 +44,8 @@
 #include <net/if.h>
 #include <libgen.h>
 
+#include <openssl/err.h>
+
 #include <urlparse.h>
 
 #include "server.h"
@@ -340,9 +342,9 @@ std::expected<void, Error> Handler::handshake_completed() {
     std::println(stderr, "Negotiated cipher suite is {}",
                  SSL_get_cipher_name(ssl_));
 
-    auto group = std::string_view{SSL_get_group_name(SSL_get_group_id(ssl_))};
-    if (!group.empty()) {
-      std::println(stderr, "Negotiated group is {}", group);
+    auto maybe_group = util::get_negotiated_group(ssl_);
+    if (maybe_group) {
+      std::println(stderr, "Negotiated group is {}", *maybe_group);
     }
 
     std::println(stderr, "Negotiated ALPN is {}",

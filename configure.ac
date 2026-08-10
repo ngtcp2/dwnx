@@ -126,7 +126,7 @@ AM_CONDITIONAL([ENABLE_SHARED], [ test "x${enable_shared}" = "xyes" ])
 have_openssl=no
 if test "x${lib_only}" = "xno"; then
   if test "x${request_openssl}" != "xno"; then
-    PKG_CHECK_MODULES([OPENSSL], [openssl >= 1.1.1],
+    PKG_CHECK_MODULES([OPENSSL], [openssl >= 3.5.0],
                       [have_openssl=yes], [have_openssl=no])
     if test "x${have_openssl}" = "xno"; then
       AC_MSG_NOTICE($OPENSSL_PKG_ERRORS)

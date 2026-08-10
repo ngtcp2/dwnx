@@ -599,6 +599,12 @@ void enable_keylog(SSL_CTX *ssl_ctx);
 
 std::string get_selected_alpn(SSL *ssl);
 
+bool get_early_data_accepted(SSL *ssl);
+
+std::optional<std::string_view> get_negotiated_group(SSL *ssl);
+
+bool get_ech_accepted(SSL *ssl);
+
 } // namespace util
 
 } // namespace dwnx

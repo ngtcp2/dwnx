@@ -43,6 +43,8 @@
 #include <libgen.h>
 #include <netinet/udp.h>
 
+#include <openssl/err.h>
+
 #include <urlparse.h>
 
 #include "client.h"
@@ -204,7 +206,7 @@ int recv_stream_data(dwnx_conn *conn, uint32_t flags, int64_t stream_id,
 } // namespace
 
 std::expected<void, Error> Client::handshake_completed() {
-  if (early_data_ && !SSL_early_data_accepted(ssl_)) {
+  if (early_data_ && !util::get_early_data_accepted(ssl_)) {
     if (!config.quiet) {
       std::println(stderr, "Early data was rejected by server");
     }
@@ -215,14 +217,14 @@ std::expected<void, Error> Client::handshake_completed() {
   if (!config.quiet) {
     std::println(stderr, "Negotiated cipher suite is {}",
                  SSL_get_cipher_name(ssl_));
-    auto group = std::string_view{SSL_get_group_name(SSL_get_group_id(ssl_))};
-    if (!group.empty()) {
-      std::println(stderr, "Negotiated group is {}", group);
+    auto maybe_group = util::get_negotiated_group(ssl_);
+    if (maybe_group) {
+      std::println(stderr, "Negotiated group is {}", *maybe_group);
     }
     std::println(stderr, "Negotiated ALPN is {}",
                  util::get_selected_alpn(ssl_));
 
-    if (!config.ech_config_list.empty() && SSL_ech_accepted(ssl_)) {
+    if (!config.ech_config_list.empty() && util::get_ech_accepted(ssl_)) {
       std::println(stderr, "ECH was accepted");
     }
   }
