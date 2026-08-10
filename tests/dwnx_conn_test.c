@@ -1730,7 +1730,7 @@ void test_dwnx_conn_writev_stream(void) {
   dwnx_buf buf;
   dwnx_tstamp ts = 0;
   dwnx_ssize nwrite, nread;
-  size_t rclen;
+  uint64_t rclen;
   dwnx_frd frd;
   dwnx_frame fr;
   int64_t stream_id;
@@ -1754,7 +1754,7 @@ void test_dwnx_conn_writev_stream(void) {
   buf.last += nwrite;
   buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
 
-  assert_size(dwnx_buf_len(&buf), ==, rclen);
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
@@ -1785,7 +1785,7 @@ void test_dwnx_conn_writev_stream(void) {
   buf.last += nwrite;
   buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
 
-  assert_size(dwnx_buf_len(&buf), ==, rclen);
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
@@ -1836,7 +1836,7 @@ void test_dwnx_conn_writev_stream(void) {
   buf.last += nwrite;
   buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
 
-  assert_size(dwnx_buf_len(&buf), ==, rclen);
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
@@ -1869,7 +1869,7 @@ void test_dwnx_conn_writev_stream(void) {
   buf.last += nwrite;
   buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
 
-  assert_size(dwnx_buf_len(&buf), ==, rclen);
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
@@ -1905,7 +1905,7 @@ void test_dwnx_conn_writev_stream(void) {
   buf.last += nwrite;
   buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
 
-  assert_size(dwnx_buf_len(&buf), ==, rclen);
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
@@ -1954,7 +1954,7 @@ void test_dwnx_conn_writev_stream(void) {
   buf.last += nwrite;
   buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
 
-  assert_size(dwnx_buf_len(&buf), ==, rclen);
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
@@ -2023,7 +2023,7 @@ void test_dwnx_conn_writev_stream(void) {
   buf.last += nwrite;
   buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
 
-  assert_size(dwnx_buf_len(&buf), ==, rclen);
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
@@ -2064,7 +2064,7 @@ void test_dwnx_conn_writev_stream(void) {
   buf.last += nwrite;
   buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
 
-  assert_size(dwnx_buf_len(&buf), ==, rclen);
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
   assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
