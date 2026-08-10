@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "dwnx_conn.h"
 #include "dwnx_conv.h"
@@ -210,10 +211,15 @@ static int extend_max_local_streams_uni(dwnx_conn *conn, uint64_t max_streams,
 }
 
 static void log_write(void *user_data, char *msg, size_t len) {
+  ssize_t nwrite;
   (void)user_data;
 
   msg[len] = '\n';
-  write(fileno(stderr), msg, len + 1);
+
+  while ((nwrite = write(fileno(stderr), msg, len + 1)) == -1 && errno == EINTR)
+    ;
+
+  assert_ssize((ssize_t)len + 1, ==, nwrite);
 }
 
 static void server_default_settings(dwnx_settings *settings) {
