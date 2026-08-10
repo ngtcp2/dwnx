@@ -85,6 +85,12 @@ extern "C" {
  */
 #define DWNX_MAX_VARINT ((1ULL << 62) - 1)
 
+/**
+ * @macro
+ *
+ * :macro:`DWNX_DEFAULT_MAX_RECORD_SIZE` is the default maximum QMux
+ * record size.
+ */
 #define DWNX_DEFAULT_MAX_RECORD_SIZE 16382
 
 /**
@@ -608,11 +614,31 @@ typedef struct dwnx_transport_params {
    * UINT64_MAX.
    */
   dwnx_duration max_idle_timeout;
+  /**
+   * :member:`max_record_size` is the maximum QMux record size that
+   * the sender accepts.  It must be greater than or equal to
+   * :macro:`DWNX_DEFAULT_MAX_RECORD_SIZE`.
+   */
   uint64_t max_record_size;
 } dwnx_transport_params;
 
+/**
+ * @function
+ *
+ * `dwnx_transport_params_default` initializes |params| with the
+ * default values.  This function first fills |params| with 0, and
+ * sets the default values to the following fields:
+ *
+ * - :member:`max_record_size <dwnx_transport_params.max_record_size>`
+ *   = :macro:`DWNX_DEFAULT_MAX_RECORD_SIZE`
+ */
 DWNX_EXTERN void dwnx_transport_params_default(dwnx_transport_params *params);
 
+/**
+ * @struct
+ *
+ * :type:`dwnx_conn` represents a single QMux connection.
+ */
 typedef struct dwnx_conn dwnx_conn;
 
 /**
@@ -628,14 +654,48 @@ typedef struct dwnx_conn dwnx_conn;
  */
 typedef void (*dwnx_log_write)(void *user_data, char *msg, size_t len);
 
+/**
+ * @struct
+ *
+ * :type:`dwnx_settings` defines QMux connection settings.
+ */
 typedef struct dwnx_settings {
+  /**
+   * :member:`conn_id` is the identifier of this connection.
+   * Currently, it is used in a log header so that people can
+   * distinguish the particular connection from the others.
+   */
   uint64_t conn_id;
+  /**
+   * :member:`initial_ts` is an initial timestamp given to the
+   * library.
+   */
   dwnx_tstamp initial_ts;
+  /**
+   * :member:`log_write` is the callback function when a single log
+   * message is emitted.  If this field is NULL, logging is disabled.
+   */
   dwnx_log_write log_write;
 } dwnx_settings;
 
+/**
+ * @function
+ *
+ * `dwnx_settings_default` initializes |settings| with the default
+ * values.  Currently, it sets 0 to all fields.
+ */
 DWNX_EXTERN void dwnx_settings_default(dwnx_settings *settings);
 
+/**
+ * @functypedef
+ *
+ * :type:`dwnx_recv_transport_params` is invoked when transport
+ * parameters |params| are received from the remote endpoint.
+ *
+ * The callback function must return 0 if it succeeds, or
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` which makes the library return
+ * immediately.
+ */
 typedef int (*dwnx_recv_transport_params)(dwnx_conn *conn,
                                           const dwnx_transport_params *params,
                                           void *user_data);
@@ -845,7 +905,17 @@ typedef int (*dwnx_extend_max_stream_data)(dwnx_conn *conn, int64_t stream_id,
 typedef int (*dwnx_extend_max_streams)(dwnx_conn *conn, uint64_t max_streams,
                                        void *user_data);
 
+/**
+ * @struct
+ *
+ * :type:`dwnx_callbacks` holds a set of callback functions.
+ */
 typedef struct dwnx_callbacks {
+  /**
+   * :member:`recv_transport_params` is a callback function which is
+   * invoked when transport parameters are received from the remote
+   * endpoint.
+   */
   dwnx_recv_transport_params recv_transport_params;
   /**
    * :member:`recv_stream_data` is a callback function which is
@@ -920,20 +990,84 @@ typedef struct dwnx_callbacks {
   dwnx_extend_max_streams extend_max_remote_streams_uni;
 } dwnx_callbacks;
 
+/**
+ * @function
+ *
+ * `dwnx_conn_server_new` creates new :type:`dwnx_conn` as a server.
+ * If it succeeds, it assigns the pointer to the object to |*pconn|.
+ * |callbacks|, |settings|, and |params| must not be NULL, and the
+ * function makes a copy of each of them.  |params| is the local
+ * transport parameters, and sent to a remote endpoint during
+ * handshake.  |user_data| is the arbitrary pointer which is passed to
+ * the user-defined callback functions.  |mem| is a memory allocator.
+ * If |mem| is NULL, the memory allocator returned by
+ * `dwnx_mem_default()` is used.
+ *
+ * Call `dwnx_conn_del` to free memory allocated for |*pconn|.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory.
+ */
 DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
                                      const dwnx_callbacks *callbacks,
                                      const dwnx_settings *settings,
                                      const dwnx_transport_params *params,
                                      const dwnx_mem *mem, void *user_data);
 
+/**
+ * @function
+ *
+ * `dwnx_conn_client_new` creates new :type:`dwnx_conn` as a client.
+ * If it succeeds, it assigns the pointer to the object to |*pconn|.
+ * |callbacks|, |settings|, and |params| must not be NULL, and the
+ * function makes a copy of each of them.  |params| is the local
+ * transport parameters, and sent to a remote endpoint during
+ * handshake.  |user_data| is the arbitrary pointer which is passed to
+ * the user-defined callback functions.  |mem| is a memory allocator.
+ * If |mem| is NULL, the memory allocator returned by
+ * `dwnx_mem_default()` is used.
+ *
+ * Call `dwnx_conn_del` to free memory allocated for |*pconn|.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory.
+ */
 DWNX_EXTERN int dwnx_conn_client_new(dwnx_conn **pconn,
                                      const dwnx_callbacks *callbacks,
                                      const dwnx_settings *settings,
                                      const dwnx_transport_params *params,
                                      const dwnx_mem *mem, void *user_data);
 
+/**
+ * @function
+ *
+ * `dwnx_conn_del` frees resources allocated for |conn|.  It also
+ * frees memory pointed by |conn|.
+ */
 DWNX_EXTERN void dwnx_conn_del(dwnx_conn *conn);
 
+/**
+ * @function
+ *
+ * `dwnx_conn_read` processes the incoming data pointed by |data| of
+ * length |datalen|.  |ts| is the timestamp of this call.  Normally,
+ * this function processes all input data.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * TBD
+ *
+ * In general, when one of negative error codes is returned, the QMux
+ * connection must be closed, and |conn| must be deleted by
+ * `dwnx_conn_del`.
+ */
 DWNX_EXTERN int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data,
                                size_t datalen, dwnx_tstamp ts);
 
@@ -1156,11 +1290,95 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  */
 #define DWNX_WRITE_STREAM_FLAG_FIN 0x02U
 
+/**
+ * @function
+ *
+ * `dwnx_conn_writev_stream` writes a single QMux record.  The caller
+ * can optionally pass the stream data.  The buffer of the record is
+ * pointed by |dest| of length |destlen|.  It returns the number of
+ * bytes written to the buffer pointed by |dest| if it succeeds.
+ *
+ * |destlen| should be at least :macro:`DWNX_DEFAULT_MAX_RECORD_SIZE`.
+ *
+ * Specifying -1 to |stream_id| means no new stream data to send.
+ *
+ * If |stream_id| is not -1, the stream data is specified as vector of
+ * data |datav|.  |datavcnt| specifies the number of :type:`dwnx_vec`
+ * that |datav| includes.  The number of data encoded in STREAM frame
+ * is stored in |*pdatalen| if it is not NULL and this function
+ * succeeds, or it returns :macro:`DWNX_ERR_WRITE_MORE`.
+ *
+ * If all given data is encoded as STREAM frame in |dest|, and if
+ * |flags| & :macro:`DWNX_WRITE_STREAM_FLAG_FIN` is nonzero, fin flag
+ * is set to outgoing STREAM frame.  Otherwise, fin flag in STREAM
+ * frame is not set.
+ *
+ * This record may contain frames other than STREAM frame.  The record
+ * might not contain STREAM frame if other frames occupy the frame.
+ * In that case, |*pdatalen| would be -1 if |pdatalen| is not NULL.
+ *
+ * Empty data is treated specially, and it is only accepted if no
+ * data, including the empty data, is submitted to a stream or
+ * :macro:`DWNX_WRITE_STREAM_FLAG_FIN` is set in |flags|.  If 0 length
+ * STREAM frame is successfully serialized, |*pdatalen| would be 0.
+ *
+ * This function may return :macro:`DWNX_ERR_WRITE_MORE` error code.
+ * It indicates that there are more spaces in the record, the caller
+ * should call this function again to send another stream data.  If no
+ * stream data is available, specify |stream_id| to -1.
+ *
+ * This function may return :macro:`DWNX_ERR_STREAM_DATA_BLOCKED`
+ * error code.  It indicates that the flow control prevents from the
+ * data to be sent.  In this case, |*pdatalen| is -1.
+ *
+ * This function may return :macro:`DWNX_ERR_STREAM_SHUT_WR` error
+ * code.  It indicates that the write side of the stream has been
+ * closed.  In this case, |*pdatalen| is -1.
+ *
+ * If the other negative error codes are returned, QMux connection
+ * must be closed.
+ *
+ * The rule of this function call is keep calling this function until
+ * it returns 0 or a positive integer, or the negative error code
+ * other than :macro:`DWNX_ERR_WRITE_MORE`,
+ * `DWNX_ERR_STREAM_DATA_BLOCKED`, and `DWNX_ERR_STREAM_SHUT_WR`.  If
+ * the function returns 0, it means that there is nothing to send.
+ *
+ * This function must not be called from inside the callback
+ * functions.
+ *
+ * This function returns the number of bytes written in |dest| if it
+ * succeeds, or one of the following negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory
+ * :macro:`DWNX_ERR_STREAM_NOT_FOUND`
+ *     Stream does not exist
+ * :macro:`DWNX_ERR_STREAM_SHUT_WR`
+ *     Stream is half closed (local); or stream is being reset.
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE`
+ *     User callback failed
+ * :macro:`DWNX_ERR_INVALID_ARGUMENT`
+ *     The total length of stream data is too large.
+ * :macro:`DWNX_ERR_STREAM_DATA_BLOCKED`
+ *     Stream is blocked because of flow control.
+ * :macro:`DWNX_ERR_WRITE_MORE`
+ *     Application can call this function to pack more stream data
+ *     into the same record.  See above to know how it works.
+ *
+ * If any other negative error is returned, close the connection.
+ */
 DWNX_EXTERN dwnx_ssize
 dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest, size_t destlen,
                         dwnx_ssize *pdatalen, uint32_t flags, int64_t stream_id,
                         const dwnx_vec *datav, size_t datavcnt, dwnx_tstamp ts);
 
+/**
+ * @function
+ *
+ * `dwnx_conn_write_stream` works like `dwnx_conn_writev_stream`, but
+ * it can accept a single stream data vector.
+ */
 DWNX_EXTERN dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
                                               size_t destlen,
                                               dwnx_ssize *pdatalen,
