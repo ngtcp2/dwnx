@@ -1299,6 +1299,9 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  * bytes written to the buffer pointed by |dest| if it succeeds.
  *
  * |destlen| should be at least :macro:`DWNX_DEFAULT_MAX_RECORD_SIZE`.
+ * The caller may provide a smaller sized buffer if the full sized TLS
+ * record cannot be sent because the congestion window is not wide
+ * open.
  *
  * Specifying -1 to |stream_id| means no new stream data to send.
  *
