@@ -36,4 +36,5 @@ ACLOCAL_AMFLAGS = -I m4
 clang-format:
 	CLANGFORMAT=`git config --get clangformat.binary`; \
 	test -z $${CLANGFORMAT} && CLANGFORMAT="clang-format"; \
-	$${CLANGFORMAT} -i lib/*.{c,h} tests/*.{c,h} lib/includes/dwnx/*.h
+	$${CLANGFORMAT} -i lib/*.{c,h} tests/*.{c,h} lib/includes/dwnx/*.h \
+	fuzz/*.cc
