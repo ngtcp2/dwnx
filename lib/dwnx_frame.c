@@ -39,6 +39,9 @@ dwnx_ssize dwnx_frame_encode(uint8_t *out, size_t outlen,
   case DWNX_FRAME_QX_TRANSPORT_PARAMETERS:
     return dwnx_frame_encode_qx_transport_parameters(
       out, outlen, &fr->qx_transport_parameters);
+  case DWNX_FRAME_QX_PING_REQUEST:
+  case DWNX_FRAME_QX_PING_RESPONSE:
+    return dwnx_frame_encode_qx_ping(out, outlen, &fr->qx_ping);
   case DWNX_FRAME_RESET_STREAM:
     return dwnx_frame_encode_reset_stream(out, outlen, &fr->reset_stream);
   case DWNX_FRAME_STOP_SENDING:
@@ -81,6 +84,25 @@ dwnx_ssize dwnx_frame_encode_qx_transport_parameters(
   assert((size_t)nwrite == paramslen);
 
   p += nwrite;
+
+  assert((size_t)(p - out) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_encode_qx_ping(uint8_t *out, size_t outlen,
+                                     const dwnx_frame_qx_ping *fr) {
+  size_t len = dwnx_put_uvarintlen(fr->type) + dwnx_put_uvarintlen(fr->seq);
+  uint8_t *p;
+
+  if (outlen < len) {
+    return DWNX_ERR_NOBUF;
+  }
+
+  p = out;
+
+  p = dwnx_put_uvarint(p, fr->type);
+  p = dwnx_put_uvarint(p, fr->seq);
 
   assert((size_t)(p - out) == len);
 

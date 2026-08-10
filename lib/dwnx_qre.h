@@ -38,6 +38,11 @@
 /* DWNX_QRE_FLAG_STARTED indicates that the encoding has started. */
 #define DWNX_QRE_FLAG_STARTED 0x01U
 
+/* DWNX_QRE_RECORDLEN_SIZE is the number of bytes that the record size
+   field occupies.  We always encode the record size in this size.  We
+   do not allow record length > 16382. */
+#define DWNX_QRE_RECORDLEN_SIZE 2
+
 typedef struct dwnx_log dwnx_log;
 
 typedef struct dwnx_qre {

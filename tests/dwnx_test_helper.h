@@ -38,6 +38,21 @@
 
 typedef struct dwnx_conn dwnx_conn;
 
+#define dwnx_check_recordlen(BUF, LEN)                                         \
+  do {                                                                         \
+    size_t n;                                                                  \
+    uint64_t reclen;                                                           \
+                                                                               \
+    assert_size(0, <, dwnx_buf_len((BUF)));                                    \
+                                                                               \
+    n = dwnx_get_uvarintlen((BUF)->pos);                                       \
+                                                                               \
+    assert_size(dwnx_buf_len((BUF)), >, n);                                    \
+                                                                               \
+    (BUF)->pos = (uint8_t *)dwnx_get_uvarint(&reclen, (BUF)->pos);             \
+    assert_uint64((uint64_t)(LEN), ==, reclen);                                \
+  } while (0);
+
 void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr);
 
 void dwnx_write_record(dwnx_buf *dest, const dwnx_frame *fr, size_t n);

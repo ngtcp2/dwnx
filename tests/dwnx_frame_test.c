@@ -39,6 +39,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_frame_encode_max_data),
   munit_void_test(test_dwnx_frame_encode_max_stream_data),
   munit_void_test(test_dwnx_frame_encode_max_streams),
+  munit_void_test(test_dwnx_frame_encode_qx_ping),
   munit_test_end(),
 };
 
@@ -364,6 +365,32 @@ void test_dwnx_frame_encode_max_streams(void) {
   assert_uint64(fr.max_streams, ==, nfr.max_streams);
 
   rv = dwnx_frame_encode_max_streams(buf, framelen - 1, &fr);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
+}
+
+void test_dwnx_frame_encode_qx_ping(void) {
+  uint8_t buf[16];
+  dwnx_frame_qx_ping fr, nfr;
+  dwnx_ssize rv, nread;
+  size_t framelen = 8 + 4;
+
+  fr = (dwnx_frame_qx_ping){
+    .type = DWNX_FRAME_QX_PING_REQUEST,
+    .seq = 64111,
+  };
+
+  rv = dwnx_frame_encode_qx_ping(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_qx_ping(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_uint64(fr.seq, ==, nfr.seq);
+
+  rv = dwnx_frame_encode_qx_ping(buf, framelen - 1, &fr);
 
   assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
 }
