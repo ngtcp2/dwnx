@@ -2700,7 +2700,11 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
 
   /* 0 length STREAM frame is allowed */
   if (ndatalen == 0 && datalen) {
-    return DWNX_ERR_STREAM_DATA_BLOCKED;
+    if (dwnx_conn_get_max_data_left(conn)) {
+      return DWNX_ERR_STREAM_DATA_BLOCKED;
+    }
+
+    return 0;
   }
 
   wdatalen = dwnx_qre_stream_max_datalen(qre, strm->stream_id, strm->tx.offset,
