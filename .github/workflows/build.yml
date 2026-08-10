@@ -1,0 +1,271 @@
+name: build
+
+on: [push, pull_request]
+
+permissions: read-all
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  AWSLC_VERSION: v5.4.0
+  OSSL_VERSION: 4.0.1
+  NGHTTP3_VERSION: head
+
+jobs:
+  setup:
+    runs-on: ubuntu-24.04
+
+    outputs:
+      nghttp3-version: ${{ steps.nghttp3-version.outputs.result }}
+
+    steps:
+    - id: nghttp3-version
+      uses: actions/github-script@v9
+      with:
+        result-encoding: string
+        script: |
+          let version = '${{ env.NGHTTP3_VERSION }}'
+
+          if (version != 'head') {
+              return version
+          }
+
+          let { data: commits } = await github.rest.repos.listCommits({
+              owner: 'ngtcp2',
+              repo: 'nghttp3',
+          })
+
+          return commits[0].sha
+
+  build-cache:
+    needs:
+    - setup
+
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26, macos-15]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v7
+    - name: Restore aws-lc cache
+      id: cache-awslc
+      uses: actions/cache@v6
+      with:
+        path: aws-lc/build
+        key: ${{ matrix.os }}-awslc-${{ env.AWSLC_VERSION }}
+    - name: Restore OSSL cache
+      id: cache-ossl
+      uses: actions/cache@v6
+      with:
+        path: ossl/build
+        key: ${{ matrix.os }}-ossl-${{ env.OSSL_VERSION }}
+    - name: Restore nghttp3 cache
+      id: cache-nghttp3
+      uses: actions/cache@v6
+      with:
+        path: nghttp3/build
+        key: ${{ matrix.os }}-nghttp3-${{ needs.setup.outputs.nghttp3-version }}
+    - id: settings
+      if: |
+        steps.cache-ossl.outputs.cache-hit != 'true' ||
+        steps.cache-awslc.outputs.cache-hit != 'true' ||
+        steps.cache-nghttp3.outputs.cache-hit != 'true'
+      run: |
+        echo 'needs-build=true' >> $GITHUB_OUTPUT
+    - name: Linux setup
+      if: runner.os == 'Linux' && steps.settings.outputs.needs-build == 'true'
+      run: |
+        # Do not use azure mirror.  They are frequently throttled
+        # therefore unstable and slow.
+        sudo sed -i '/azure.archive.ubuntu.com/d' /etc/apt/apt-mirrors.txt
+        sudo apt-get update
+        sudo apt-get install \
+          autoconf \
+          automake \
+          autotools-dev \
+          libtool \
+          pkg-config \
+          cmake \
+          cmake-data
+
+        echo 'NPROC='"$(nproc)" >> $GITHUB_ENV
+    - name: MacOS setup
+      if: runner.os == 'macOS' && steps.settings.outputs.needs-build == 'true'
+      run: |
+        brew install autoconf automake libtool
+
+        echo 'NPROC='"$(sysctl -n hw.ncpu)" >> $GITHUB_ENV
+    - name: Build aws-lc
+      if: steps.cache-awslc.outputs.cache-hit != 'true'
+      run: |
+        ./ci/build_aws-lc.sh
+    - name: Build OSSL
+      if: steps.cache-ossl.outputs.cache-hit != 'true'
+      run: |
+        ./ci/build_openssl.sh
+    - name: Build nghttp3
+      if: steps.cache-nghttp3.outputs.cache-hit != 'true'
+      run: |
+        ./ci/build_nghttp3.sh
+      env:
+        NGHTTP3_VERSION: ${{ needs.setup.outputs.nghttp3-version }}
+
+  build:
+    needs:
+    - build-cache
+
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-26, macos-15]
+        compiler: [gcc, clang]
+        buildtool: [autotools]
+        tls: [aws-lc, ossl]
+        include:
+        - os: ubuntu-24.04
+          compiler: clang
+          buildtool: distcheck
+          tls: aws-lc
+        - os: ubuntu-24.04-arm
+          compiler: gcc
+          buildtool: autotools
+          tls: aws-lc
+        - os: ubuntu-24.04-arm
+          compiler: clang
+          buildtool: autotools
+          tls: aws-lc
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: recursive
+    - name: Linux setup
+      if: runner.os == 'Linux'
+      run: |
+        # Do not use azure mirror.  They are frequently throttled
+        # therefore unstable and slow.
+        sudo sed -i '/azure.archive.ubuntu.com/d' /etc/apt/apt-mirrors.txt
+        sudo apt-get update
+        sudo apt-get install \
+          g++-14 \
+          clang-19 \
+          autoconf \
+          automake \
+          autotools-dev \
+          libtool \
+          pkg-config \
+          libev-dev
+
+        asanflags="-fsanitize=address,undefined -fno-sanitize-recover=undefined"
+
+        LDFLAGS="$LDFLAGS $asanflags"
+        CFLAGS="$CFLAGS $asanflags -g3"
+        CXXFLAGS="$CXXFLAGS $asanflags -g3"
+
+        echo 'LDFLAGS='"$LDFLAGS" >> $GITHUB_ENV
+        echo 'CFLAGS='"$CFLAGS" >> $GITHUB_ENV
+        echo 'CXXFLAGS='"$CXXFLAGS" >> $GITHUB_ENV
+
+        echo 'NPROC='"$(nproc)" >> $GITHUB_ENV
+
+        # https://github.com/actions/runner-images/issues/9491#issuecomment-1989718917
+        # Asan in llvm 14 provided in ubuntu 22.04 is incompatible with
+        # high-entropy ASLR in much newer kernels that GitHub runners are
+        # using leading to random crashes: https://reviews.llvm.org/D148280
+        sudo sysctl vm.mmap_rnd_bits=28
+    - name: MacOS setup
+      if: runner.os == 'macOS'
+      run: |
+        brew install autoconf automake libtool libev
+
+        echo 'NPROC='"$(sysctl -n hw.ncpu)" >> $GITHUB_ENV
+    - name: Setup clang (Linux)
+      if: runner.os == 'Linux' && matrix.compiler == 'clang'
+      run: |
+        echo 'CC=clang-19' >> $GITHUB_ENV
+        echo 'CXX=clang++-19' >> $GITHUB_ENV
+    - name: Setup clang (MacOS)
+      if: runner.os == 'macOS' && matrix.compiler == 'clang'
+      run: |
+        echo 'CC=clang' >> $GITHUB_ENV
+        echo 'CXX=clang++' >> $GITHUB_ENV
+    - name: Setup gcc (Linux)
+      if: runner.os == 'Linux' && matrix.compiler == 'gcc'
+      run: |
+        echo 'CC=gcc-14' >> $GITHUB_ENV
+        echo 'CXX=g++-14' >> $GITHUB_ENV
+    - name: Setup gcc (MacOS)
+      if: runner.os == 'macOS' && matrix.compiler == 'gcc'
+      run: |
+        echo 'CC=gcc' >> $GITHUB_ENV
+        echo 'CXX=g++' >> $GITHUB_ENV
+    - name: Restore aws-lc cache
+      uses: actions/cache/restore@v6
+      if: matrix.tls == 'aws-lc'
+      with:
+        path: aws-lc/build
+        key: ${{ matrix.os }}-awslc-${{ env.AWSLC_VERSION }}
+        fail-on-cache-miss: true
+    - name: Restore OSSL cache
+      uses: actions/cache/restore@v6
+      if: matrix.tls == 'ossl'
+      with:
+        path: ossl/build
+        key: ${{ matrix.os }}-ossl-${{ env.OSSL_VERSION }}
+        fail-on-cache-miss: true
+    - name: Restore nghttp3 cache
+      uses: actions/cache/restore@v6
+      with:
+        path: nghttp3/build
+        key: ${{ matrix.os }}-nghttp3-${{ needs.setup.outputs.nghttp3-version }}
+        fail-on-cache-miss: true
+    - name: Setup libev environment variables
+      if: runner.os == 'macOS'
+      run: |
+        LIBEV_CFLAGS="-I/opt/homebrew/Cellar/libev/4.33/include"
+        LIBEV_LIBS="-L/opt/homebrew/Cellar/libev/4.33/lib -lev"
+
+        echo 'LIBEV_CFLAGS='"$LIBEV_CFLAGS" >> $GITHUB_ENV
+        echo 'LIBEV_LIBS='"$LIBEV_LIBS" >> $GITHUB_ENV
+    - name: Setup PKG_CONFIG_PATH
+      run: |
+        PKG_CONFIG_PATH="$PWD/nghttp3/build/lib/pkgconfig"
+
+        case "${{ matrix.tls }}" in
+        "aws-lc")
+          PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$PWD/aws-lc/build/lib/pkgconfig"
+          ;;
+        "ossl")
+          PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$PWD/ossl/build/lib64/pkgconfig"
+          ;;
+        *)
+          echo "unsupported TLS library: ${{ matrix.tls }}"
+          exit 1
+          ;;
+        esac
+
+        echo 'PKG_CONFIG_PATH='"$PKG_CONFIG_PATH" >> $GITHUB_ENV
+    - name: Configure autotools
+      if: matrix.buildtool == 'autotools'
+      run: |
+        autoreconf -i && \
+        ./configure --disable-dependency-tracking --enable-werror \
+          --with-libnghttp3 --with-openssl
+    - name: Configure distcheck
+      if: matrix.buildtool == 'distcheck'
+      run: |
+        autoreconf -i && ./configure --disable-dependency-tracking
+    - name: Build
+      if: matrix.buildtool != 'distcheck'
+      run: |
+        make -j"$NPROC"
+        make -j"$NPROC" check
+    - name: Run distcheck
+      if: matrix.buildtool == 'distcheck'
+      run: |
+        make -j"$NPROC" distcheck DISTCHECK_CONFIGURE_FLAGS="--enable-werror --with-libnghttp3 --with-openssl"
