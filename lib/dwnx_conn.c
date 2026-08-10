@@ -345,10 +345,12 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   conn->rx.window = conn->rx.unsent_max_offset = conn->rx.max_offset =
     params->initial_max_data;
   conn->rx.ping.last_seq = -1;
+  conn->rx.ping.last_resp_seq = -1;
   conn->rx.bidi.unsent_max_streams = params->initial_max_streams_bidi;
   conn->rx.bidi.max_streams = params->initial_max_streams_bidi;
   conn->rx.uni.unsent_max_streams = params->initial_max_streams_uni;
   conn->rx.uni.max_streams = params->initial_max_streams_uni;
+  conn->tx.ping.last_seq = -1;
 
   *pconn = conn;
 
@@ -705,7 +707,10 @@ static int conn_recv_qx_ping(dwnx_conn *conn, const dwnx_frame_qx_ping *fr,
   (void)ts;
 
   if (fr->type == DWNX_FRAME_QX_PING_RESPONSE) {
-    /* TODO: Process response */
+    if (conn->tx.ping.last_seq < (int64_t)fr->seq) {
+      return DWNX_ERR_PROTO;
+    }
+
     return 0;
   }
 
@@ -2559,6 +2564,20 @@ int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts) {
     }
 
     conn->rx.max_offset = conn->rx.unsent_max_offset;
+  }
+
+  if (conn->rx.ping.last_seq > conn->rx.ping.last_resp_seq) {
+    fr.qx_ping = (dwnx_frame_qx_ping){
+      .type = DWNX_FRAME_QX_PING_RESPONSE,
+      .seq = (uint64_t)conn->rx.ping.last_seq,
+    };
+
+    rv = dwnx_qre_encode_frame(qre, &fr);
+    if (rv != 0) {
+      return rv;
+    }
+
+    conn->rx.ping.last_resp_seq = conn->rx.ping.last_seq;
   }
 
   for (; !dwnx_pq_empty(&conn->tx.strmq);) {

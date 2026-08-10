@@ -27,8 +27,6 @@
 #include "dwnx_macro.h"
 #include "dwnx_log.h"
 
-#define DWNX_QRE_RECORDLEN_SIZE 2
-
 void dwnx_qre_init(dwnx_qre *qre, dwnx_log *log) {
   *qre = (dwnx_qre){
     .log = log,

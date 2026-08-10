@@ -81,9 +81,13 @@ struct dwnx_conn {
     uint64_t window;
 
     struct {
-      /* last_seq is the last sequence number in QX_PING frame
+      /* last_seq is the last sequence number in QX_PING_REQUEST frame
          received so far.  It is initialized as -1. */
       int64_t last_seq;
+      /* last_resp_seq is the last sequence number in QX_PING_RESPONSE
+         frame sent to the remote endpoint.  It is initialized as -1.
+         The invariant last_seq >= last_resp_seq must hold. */
+      int64_t last_resp_seq;
     } ping;
 
     struct {
@@ -121,6 +125,12 @@ struct dwnx_conn {
     /* max_offset is the maximum offset that local endpoint can
        send. */
     uint64_t max_offset;
+
+    struct {
+      /* last_seq is the last sequence number in QX_PING_REQUEST frame
+         sent so far.  It is initialized as -1. */
+      int64_t last_seq;
+    } ping;
 
     struct {
       /* max_streams is the maximum number of bidirectional streams which

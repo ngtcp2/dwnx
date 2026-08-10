@@ -1565,8 +1565,11 @@ void test_dwnx_conn_recv_qx_ping(void) {
   dwnx_tstamp ts = 0;
   int rv;
   size_t i;
+  dwnx_ssize nwrite, nread;
+  dwnx_frd frd;
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+  dwnx_frd_init(&frd);
 
   setup_default_server(&conn);
   dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
@@ -1634,6 +1637,77 @@ void test_dwnx_conn_recv_qx_ping(void) {
               conn->rx.rcrd.state);
   assert_size(0, ==, conn->rx.rcrd.record_left);
   assert_int64(1000000007, ==, conn->rx.ping.last_seq);
+
+  dwnx_conn_del(conn);
+
+  /* Respond to the ping request */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  nwrite =
+    dwnx_conn_write_stream(conn, rawbuf, sizeof(rawbuf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  fr.qx_ping = (dwnx_frame_qx_ping){
+    .type = DWNX_FRAME_QX_PING_REQUEST,
+    .seq = 1000000009,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_int64(1000000009, ==, conn->rx.ping.last_seq);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_int64(1000000009, ==, conn->rx.ping.last_resp_seq);
+
+  buf.last += nwrite;
+  dwnx_check_recordlen(&buf, nwrite - DWNX_QRE_RECORDLEN_SIZE);
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_QX_PING_RESPONSE, ==, fr.hd.type);
+  assert_uint64(1000000009, ==, fr.qx_ping.seq);
+
+  /* QX_PING_RESPONSE is only sent at most once per seq */
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, ==, nwrite);
+
+  dwnx_conn_del(conn);
+
+  /* Receive QX_PING_RESPONSE with seq that is larger than seq we ever
+     sent. */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr.qx_ping = (dwnx_frame_qx_ping){
+    .type = DWNX_FRAME_QX_PING_RESPONSE,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
 
   dwnx_conn_del(conn);
 }
