@@ -71,6 +71,7 @@ HFILES = \
 	dwnx_idtr.h \
 	dwnx_ksl.h \
 	dwnx_log.h \
+	dwnx_macro.h \
 	dwnx_map.h \
 	dwnx_mem.h \
 	dwnx_net.h\
