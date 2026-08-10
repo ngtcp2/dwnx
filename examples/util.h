@@ -42,6 +42,7 @@
 #include <filesystem>
 #include <optional>
 #include <algorithm>
+#include <bit>
 
 #include <openssl/ssl.h>
 
