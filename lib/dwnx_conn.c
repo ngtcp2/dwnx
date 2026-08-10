@@ -2716,6 +2716,7 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
   fr.stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
     .stream_id = strm->stream_id,
+    .flags = DWNX_STREAM_LEN_BIT,
     .fin =
       (flags & DWNX_WRITE_STREAM_FLAG_FIN) && datalen == (uint64_t)wdatalen,
     .offset = strm->tx.offset,
@@ -2723,6 +2724,14 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
     .data = datav,
     .datacnt = datavcnt,
   };
+
+  if (fr.stream.offset) {
+    fr.stream.flags |= DWNX_STREAM_OFF_BIT;
+  }
+
+  if (fr.stream.fin) {
+    fr.stream.flags |= DWNX_STREAM_FIN_BIT;
+  }
 
   rv = dwnx_qre_encode_frame(qre, &fr);
   if (rv != 0) {
