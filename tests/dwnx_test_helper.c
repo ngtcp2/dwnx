@@ -71,6 +71,10 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
       flags |= DWNX_STREAM_LEN_BIT;
     }
 
+    if (fr->stream.fin) {
+      flags |= DWNX_STREAM_FIN_BIT;
+    }
+
     dest->last = dwnx_put_uvarint(dest->last, fr->stream.type | flags);
     dest->last = dwnx_put_uvarint(dest->last, (uint64_t)fr->stream.stream_id);
 

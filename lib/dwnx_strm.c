@@ -56,3 +56,8 @@ void dwnx_strm_shutdown(dwnx_strm *strm, uint32_t flags) {
 int dwnx_strm_is_tx_queued(const dwnx_strm *strm) {
   return strm->pe.index != DWNX_PQ_BAD_INDEX;
 }
+
+int dwnx_strm_should_close_stream(const dwnx_strm *strm) {
+  return (strm->flags & DWNX_STRM_FLAG_SHUT_RDWR) == DWNX_STRM_FLAG_SHUT_RDWR &&
+         !(strm->flags & DWNX_STRM_FLAG_SEND_RESET_STREAM);
+}

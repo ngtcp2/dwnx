@@ -1036,6 +1036,9 @@ static int conn_recv_stop_sending(dwnx_conn *conn,
 
   strm->flags |= DWNX_STRM_FLAG_SHUT_WR | DWNX_STRM_FLAG_STOP_SENDING_RECVED;
 
+  /* If the read side of stream is closed, the stream is closed after
+     writing RESET_STREAM. */
+
   return 0;
 }
 
@@ -2183,8 +2186,7 @@ fail:
 }
 
 int dwnx_conn_close_stream_if_shut_rdwr(dwnx_conn *conn, dwnx_strm *strm) {
-  if ((strm->flags & DWNX_STRM_FLAG_SHUT_RDWR) != DWNX_STRM_FLAG_SHUT_RDWR ||
-      (strm->flags & DWNX_STRM_FLAG_SEND_RESET_STREAM)) {
+  if (!dwnx_strm_should_close_stream(strm)) {
     return 0;
   }
 
@@ -2597,6 +2599,17 @@ int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts) {
       }
 
       strm->flags &= ~DWNX_STRM_FLAG_SEND_RESET_STREAM;
+
+      if (dwnx_strm_should_close_stream(strm)) {
+        dwnx_conn_tx_strmq_pop(conn);
+
+        rv = dwnx_conn_close_stream(conn, strm);
+        if (rv != 0) {
+          return rv;
+        }
+
+        continue;
+      }
     }
 
     if (strm->flags & DWNX_STRM_FLAG_SEND_STOP_SENDING) {

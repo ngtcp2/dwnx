@@ -791,10 +791,12 @@ void test_dwnx_conn_recv_stop_sending(void) {
   dwnx_buf buf;
   dwnx_frame fr[2];
   dwnx_tstamp ts = 0;
+  dwnx_strm *strm;
   int rv;
   userdata ud;
   conn_options opts;
   size_t i;
+  dwnx_ssize nwrite;
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -890,6 +892,51 @@ void test_dwnx_conn_recv_stop_sending(void) {
   assert_size(1, ==, ud.recv_stop_sending.ncalled);
   assert_int64(4, ==, ud.recv_stop_sending.stream_id);
   assert_uint64(1000000007, ==, ud.recv_stop_sending.app_error_code);
+
+  dwnx_conn_del(conn);
+
+  /* Receives STREAM with fin and STOP_SENDING.  After writing
+     RESET_STREAM, the stream must be closed. */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .stream_id = 4,
+    .fin = 1,
+    .len = 99,
+  };
+  fr[1].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id = 4,
+    .app_error_code = 772342,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 2);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, 4);
+
+  assert_not_null(strm);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SHUT_RD);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SHUT_WR);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_null(dwnx_conn_find_stream(conn, 4));
 
   dwnx_conn_del(conn);
 }

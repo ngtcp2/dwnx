@@ -155,4 +155,10 @@ void dwnx_strm_shutdown(dwnx_strm *strm, uint32_t flags);
  */
 int dwnx_strm_is_tx_queued(const dwnx_strm *strm);
 
+/*
+ * dwnx_strm_should_close_stream returns nonzero if |strm| should be
+ * closed.
+ */
+int dwnx_strm_should_close_stream(const dwnx_strm *strm);
+
 #endif /* !defined(DWNX_STRM_H) */
