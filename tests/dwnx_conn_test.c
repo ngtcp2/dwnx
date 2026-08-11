@@ -220,12 +220,17 @@ static void log_write(void *user_data, char *msg, size_t len) {
   ssize_t nwrite;
   (void)user_data;
 
-  msg[len] = '\n';
+  msg[len++] = '\n';
 
-  while ((nwrite = write(fileno(stderr), msg, len + 1)) == -1 && errno == EINTR)
+  while ((nwrite = write(fileno(stderr), msg,
+#ifdef WIN32
+                         (unsigned int)
+#endif /* WIN32 */
+                           len)) == -1 &&
+         errno == EINTR)
     ;
 
-  assert_ssize((ssize_t)len + 1, ==, nwrite);
+  assert_ssize((ssize_t)len, ==, nwrite);
 }
 
 static void server_default_settings(dwnx_settings *settings) {

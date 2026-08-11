@@ -1201,7 +1201,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return DWNX_ERR_FRAME_ENCODING;
       }
 
-      rcrd->record_left = vint;
+      rcrd->record_left = (size_t)vint;
       rcrd->state = DWNX_RECORD_READ_STATE_FRAME_TYPE;
 
       dwnx_log_rx_rcd(&conn->log, rcrd->record_left);
@@ -1390,6 +1390,13 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       vint = vird->acc;
       dwnx_varint_reader_reset(vird);
 
+      /* Because our max record size is constant (we do not allow
+         application to change it), the size is smaller than
+         DWNX_DEFAULT_MAX_RECORD_SIZE. */
+      if (vint > rcrd->record_left) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
       if (vint == 0) {
         rv = conn_recv_transport_params(conn, NULL, 0);
         if (rv != 0) {
@@ -1399,31 +1406,24 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         goto frame_done;
       }
 
-      /* Because our max record size is constant (we do not allow
-         application to change it), the size is smaller than
-         DWNX_DEFAULT_MAX_RECORD_SIZE. */
-      if (vint > rcrd->record_left) {
-        return DWNX_ERR_FRAME_ENCODING;
-      }
-
       if (p + vint <= end) {
-        rv = conn_recv_transport_params(conn, p, vint);
+        rv = conn_recv_transport_params(conn, p, (size_t)vint);
         if (rv != 0) {
           return rv;
         }
 
         p += vint;
-        rcrd->record_left -= vint;
+        rcrd->record_left -= (size_t)vint;
 
         goto frame_done;
       }
 
-      buf = dwnx_mem_malloc(mem, vint);
+      buf = dwnx_mem_malloc(mem, (size_t)vint);
       if (!buf) {
         return DWNX_ERR_NOMEM;
       }
 
-      dwnx_buf_init(&rcrd->buf, buf, vint);
+      dwnx_buf_init(&rcrd->buf, buf, (size_t)vint);
 
       rcrd->state = DWNX_RECORD_READ_STATE_QX_TRANSPORT_PARAMETERS_PARAMS;
 
@@ -1602,7 +1602,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return DWNX_ERR_FRAME_ENCODING;
       }
 
-      rcrd->fr.stream.len = vint;
+      rcrd->fr.stream.len = (size_t)vint;
       rcrd->field_left = rcrd->fr.stream.len;
 
       dwnx_log_rx_fr(&conn->log, &rcrd->fr);
@@ -2055,12 +2055,14 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return 0;
       }
 
-      rcrd->fr.connection_close.reasonlen = vird->acc;
+      vint = vird->acc;
       dwnx_varint_reader_reset(vird);
 
-      if (rcrd->fr.connection_close.reasonlen > rcrd->record_left) {
+      if (vint > rcrd->record_left) {
         return DWNX_ERR_FRAME_ENCODING;
       }
+
+      rcrd->fr.connection_close.reasonlen = (size_t)vint;
 
       if (p + rcrd->fr.connection_close.reasonlen <= end) {
         /* reason is fit within [p..end) */
