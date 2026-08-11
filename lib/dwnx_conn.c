@@ -887,7 +887,7 @@ static int conn_recv_reset_stream(dwnx_conn *conn,
   strm = dwnx_conn_find_stream(conn, fr->stream_id);
   if (!strm) {
     if (local_stream) {
-      return 0;
+      return DWNX_ERR_PROTO;
     }
 
     rv = dwnx_idtr_open(idtr, fr->stream_id);
@@ -898,7 +898,7 @@ static int conn_recv_reset_stream(dwnx_conn *conn,
 
       assert(rv == DWNX_ERR_STREAM_IN_USE);
 
-      return 0;
+      return DWNX_ERR_PROTO;
     }
 
     if (conn_initial_stream_rx_offset(conn, fr->stream_id) < fr->final_size ||

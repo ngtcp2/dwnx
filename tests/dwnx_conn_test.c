@@ -113,6 +113,16 @@ static const dwnx_transport_params empty_remote_params = {
   .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
 };
 
+static const dwnx_transport_params default_remote_params = {
+  .initial_max_streams_bidi = 100,
+  .initial_max_streams_uni = 100,
+  .initial_max_stream_data_bidi_local = 64 * 1024,
+  .initial_max_stream_data_bidi_remote = 64 * 1024,
+  .initial_max_stream_data_uni = 64 * 1024,
+  .initial_max_data = 128 * 1024,
+  .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
+};
+
 static int recv_stream_data(dwnx_conn *conn, uint32_t flags, int64_t stream_id,
                             uint64_t offset, const uint8_t *data,
                             size_t datalen, void *user_data,
@@ -596,6 +606,9 @@ void test_dwnx_conn_recv_reset_stream(void) {
   userdata ud;
   conn_options opts;
   size_t i;
+  int64_t stream_id;
+  dwnx_ssize nwrite;
+  dwnx_strm *strm;
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -770,6 +783,86 @@ void test_dwnx_conn_recv_reset_stream(void) {
   dwnx_write_record(&buf, fr, 2);
 
   ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receiving RESET_STREAM against the local stream that has already
+     been closed */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_stream(conn, buf.pos, dwnx_buf_left(&buf), NULL,
+                                  DWNX_WRITE_STREAM_FLAG_FIN, stream_id, NULL,
+                                  0, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
+
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.pos, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  fr[0].reset_stream = (dwnx_frame_reset_stream){
+    .type = DWNX_FRAME_RESET_STREAM,
+    .stream_id = stream_id,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_null(strm);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receiving RESET_STREAM against the remote stream that has already
+     been closed */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .stream_id = 2,
+    .fin = 1,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, 2);
+
+  assert_null(strm);
+
+  fr[0].reset_stream = (dwnx_frame_reset_stream){
+    .type = DWNX_FRAME_RESET_STREAM,
+    .stream_id = 2,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
   rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
 
   assert_int(DWNX_ERR_PROTO, ==, rv);
