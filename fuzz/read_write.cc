@@ -246,7 +246,7 @@ void read_write(dwnx_conn *conn, FuzzedDataProvider &fdp, dwnx_tstamp &ts) {
 
       auto flags = fdp.ConsumeIntegral<uint32_t>();
 
-      int64_t stream_id;
+      int64_t stream_id = -1;
 
       switch (fdp.ConsumeIntegralInRange<int>(0, 2)) {
       case 0:
