@@ -1516,7 +1516,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
           return rv;
         }
 
-        if (rcrd->record_left == 0) {
+        if (rcrd->field_left == 0) {
           goto frame_done;
         }
 
@@ -1564,7 +1564,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
           return rv;
         }
 
-        if (rcrd->record_left == 0) {
+        if (rcrd->field_left == 0) {
           goto frame_done;
         }
 
@@ -1609,7 +1609,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return rv;
       }
 
-      if (rcrd->record_left == 0) {
+      if (rcrd->field_left == 0) {
         goto frame_done;
       }
 
