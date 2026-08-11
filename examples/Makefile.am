@@ -60,7 +60,7 @@ CLIENT_BASE_SRCS = \
 	shared.cc shared.h \
 	network.h
 
-noinst_PROGRAMS = h3client h3server
+noinst_PROGRAMS = h3client h3server hqclient hqserver
 
 h3server_CPPFLAGS = ${AM_CPPFLAGS} -DWITH_EXAMPLE_HTTP3_PROTO_CODEC
 h3server_SOURCES = \
@@ -73,3 +73,18 @@ h3client_SOURCES = \
 	${CLIENT_BASE_SRCS} \
 	client.cc client.h \
 	http3_client_proto_codec.cc http3_client_proto_codec.h
+
+hqserver_CPPFLAGS = ${AM_CPPFLAGS} -DWITH_EXAMPLE_HQ_PROTO_CODEC \
+	-I$(top_srcdir)/third-party
+hqserver_LDADD = ${LDADD} \
+	$(top_builddir)/third-party/libhttp-parser.la
+hqserver_SOURCES = \
+	${SERVER_SRCS} \
+	server.cc server.h \
+	hq_server_proto_codec.cc hq_server_proto_codec.h
+
+hqclient_CPPFLAGS = ${AM_CPPFLAGS} -DWITH_EXAMPLE_HQ_PROTO_CODEC
+hqclient_SOURCES = \
+	${CLIENT_BASE_SRCS} \
+	client.cc client.h \
+	hq_client_proto_codec.cc hq_client_proto_codec.h
