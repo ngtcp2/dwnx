@@ -109,12 +109,8 @@ typedef struct conn_options {
   void *user_data;
 } conn_options;
 
-static const dwnx_frame_qx_transport_parameters empty_params_fr = {
-  .type = DWNX_FRAME_QX_TRANSPORT_PARAMETERS,
-  .params =
-    &(dwnx_transport_params){
-      .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
-    },
+static const dwnx_transport_params empty_remote_params = {
+  .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
 };
 
 static int recv_stream_data(dwnx_conn *conn, uint32_t flags, int64_t stream_id,
@@ -428,7 +424,7 @@ void test_dwnx_conn_recv_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -461,7 +457,7 @@ void test_dwnx_conn_recv_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -495,7 +491,7 @@ void test_dwnx_conn_recv_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -529,7 +525,7 @@ void test_dwnx_conn_recv_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -563,7 +559,7 @@ void test_dwnx_conn_recv_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -614,7 +610,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[1].reset_stream = (dwnx_frame_reset_stream){
     .type = DWNX_FRAME_RESET_STREAM,
@@ -656,7 +652,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   dwnx_buf_reset(&buf);
   dwnx_write_record(&buf, fr, 1);
@@ -705,7 +701,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[1].reset_stream = (dwnx_frame_reset_stream){
     .type = DWNX_FRAME_RESET_STREAM,
@@ -730,7 +726,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[1].reset_stream = (dwnx_frame_reset_stream){
     .type = DWNX_FRAME_RESET_STREAM,
@@ -755,7 +751,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -811,7 +807,7 @@ void test_dwnx_conn_recv_stop_sending(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[1].stop_sending = (dwnx_frame_stop_sending){
     .type = DWNX_FRAME_STOP_SENDING,
@@ -855,7 +851,7 @@ void test_dwnx_conn_recv_stop_sending(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   dwnx_buf_reset(&buf);
   dwnx_write_record(&buf, fr, 1);
@@ -902,7 +898,7 @@ void test_dwnx_conn_recv_stop_sending(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -953,7 +949,7 @@ void test_dwnx_conn_recv_max_data(void) {
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.max_data = (dwnx_frame_max_data){
     .type = DWNX_FRAME_MAX_DATA,
@@ -974,7 +970,7 @@ void test_dwnx_conn_recv_max_data(void) {
 
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.max_data = (dwnx_frame_max_data){
     .type = DWNX_FRAME_MAX_DATA,
@@ -1021,7 +1017,7 @@ void test_dwnx_conn_recv_max_stream_data(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.max_stream_data = (dwnx_frame_max_stream_data){
     .type = DWNX_FRAME_MAX_STREAM_DATA,
@@ -1057,7 +1053,7 @@ void test_dwnx_conn_recv_max_stream_data(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.max_stream_data = (dwnx_frame_max_stream_data){
     .type = DWNX_FRAME_MAX_STREAM_DATA,
@@ -1118,7 +1114,7 @@ void test_dwnx_conn_recv_max_streams_bidi(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.max_streams = (dwnx_frame_max_streams){
     .type = DWNX_FRAME_MAX_STREAMS_BIDI,
@@ -1146,7 +1142,7 @@ void test_dwnx_conn_recv_max_streams_bidi(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.max_streams = (dwnx_frame_max_streams){
     .type = DWNX_FRAME_MAX_STREAMS_BIDI,
@@ -1199,7 +1195,7 @@ void test_dwnx_conn_recv_max_streams_uni(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.max_streams = (dwnx_frame_max_streams){
     .type = DWNX_FRAME_MAX_STREAMS_UNI,
@@ -1227,7 +1223,7 @@ void test_dwnx_conn_recv_max_streams_uni(void) {
     .user_data = &ud,
   };
   setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.max_streams = (dwnx_frame_max_streams){
     .type = DWNX_FRAME_MAX_STREAMS_UNI,
@@ -1271,7 +1267,7 @@ void test_dwnx_conn_recv_data_blocked(void) {
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
@@ -1291,7 +1287,7 @@ void test_dwnx_conn_recv_data_blocked(void) {
 
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
@@ -1326,7 +1322,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
@@ -1347,7 +1343,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
@@ -1383,7 +1379,7 @@ void test_dwnx_conn_recv_streams_blocked_bidi(void) {
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.streams_blocked = (dwnx_frame_streams_blocked){
     .type = DWNX_FRAME_STREAMS_BLOCKED_BIDI,
@@ -1403,7 +1399,7 @@ void test_dwnx_conn_recv_streams_blocked_bidi(void) {
 
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.streams_blocked = (dwnx_frame_streams_blocked){
     .type = DWNX_FRAME_STREAMS_BLOCKED_BIDI,
@@ -1441,7 +1437,7 @@ void test_dwnx_conn_recv_streams_blocked_uni(void) {
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.streams_blocked = (dwnx_frame_streams_blocked){
     .type = DWNX_FRAME_STREAMS_BLOCKED_UNI,
@@ -1461,7 +1457,7 @@ void test_dwnx_conn_recv_streams_blocked_uni(void) {
 
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.streams_blocked = (dwnx_frame_streams_blocked){
     .type = DWNX_FRAME_STREAMS_BLOCKED_UNI,
@@ -1500,7 +1496,7 @@ void test_dwnx_conn_recv_connection_close(void) {
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.connection_close = (dwnx_frame_connection_close){
     .type = DWNX_FRAME_CONNECTION_CLOSE,
@@ -1520,7 +1516,7 @@ void test_dwnx_conn_recv_connection_close(void) {
 
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.connection_close = (dwnx_frame_connection_close){
     .type = DWNX_FRAME_CONNECTION_CLOSE,
@@ -1559,7 +1555,7 @@ void test_dwnx_conn_recv_connection_close_app(void) {
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.connection_close = (dwnx_frame_connection_close){
     .type = DWNX_FRAME_CONNECTION_CLOSE_APP,
@@ -1578,7 +1574,7 @@ void test_dwnx_conn_recv_connection_close_app(void) {
 
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.connection_close = (dwnx_frame_connection_close){
     .type = DWNX_FRAME_CONNECTION_CLOSE_APP,
@@ -1614,7 +1610,7 @@ void test_dwnx_conn_recv_padding(void) {
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.padding = (dwnx_frame_padding){
     .type = DWNX_FRAME_PADDING,
@@ -1648,7 +1644,7 @@ void test_dwnx_conn_recv_qx_ping(void) {
   dwnx_frd_init(&frd);
 
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.qx_ping = (dwnx_frame_qx_ping){
     .type = DWNX_FRAME_QX_PING_REQUEST,
@@ -1689,7 +1685,7 @@ void test_dwnx_conn_recv_qx_ping(void) {
 
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.qx_ping = (dwnx_frame_qx_ping){
     .type = DWNX_FRAME_QX_PING_REQUEST,
@@ -1718,7 +1714,7 @@ void test_dwnx_conn_recv_qx_ping(void) {
 
   /* Respond to the ping request */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   nwrite =
     dwnx_conn_write_stream(conn, rawbuf, sizeof(rawbuf), NULL,
@@ -1772,7 +1768,7 @@ void test_dwnx_conn_recv_qx_ping(void) {
   /* Receive QX_PING_RESPONSE with seq that is larger than seq we ever
      sent. */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.qx_ping = (dwnx_frame_qx_ping){
     .type = DWNX_FRAME_QX_PING_RESPONSE,
@@ -1794,10 +1790,6 @@ void test_dwnx_conn_extend_max_stream_offset(void) {
     .initial_max_streams_uni = 1,
     .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
   };
-  static const dwnx_frame_qx_transport_parameters params_fr = {
-    .type = DWNX_FRAME_QX_TRANSPORT_PARAMETERS,
-    .params = &remote_params,
-  };
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -1811,7 +1803,7 @@ void test_dwnx_conn_extend_max_stream_offset(void) {
   /* Extending the max stream offset of non-existent stream is
      noop. */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &empty_params_fr, ++ts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   rv = dwnx_conn_extend_max_stream_offset(conn, 0, 1000000007);
 
@@ -1822,7 +1814,7 @@ void test_dwnx_conn_extend_max_stream_offset(void) {
   /* Attempt to extend the max stream offset against local
      unidirectional stream */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &params_fr, ++ts);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
 
@@ -1837,7 +1829,7 @@ void test_dwnx_conn_extend_max_stream_offset(void) {
 
   /* Increase stream data limit */
   setup_default_server(&conn);
-  dwnx_read_transport_params(conn, &params_fr, ++ts);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
 
@@ -1877,10 +1869,6 @@ void test_dwnx_conn_writev_stream(void) {
     .initial_max_data = 64 * 1024,
     .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
   };
-  static const dwnx_frame_qx_transport_parameters params_fr = {
-    .type = DWNX_FRAME_QX_TRANSPORT_PARAMETERS,
-    .params = &remote_params,
-  };
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -1899,7 +1887,7 @@ void test_dwnx_conn_writev_stream(void) {
 
   /* Just write transport parameters */
   setup_default_client(&conn);
-  dwnx_read_transport_params(conn, &params_fr, ++ts);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   nwrite =
     dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
@@ -1924,7 +1912,7 @@ void test_dwnx_conn_writev_stream(void) {
 
   /* Write STREAM frame */
   setup_default_client(&conn);
-  dwnx_read_transport_params(conn, &params_fr, ++ts);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
 
@@ -1964,7 +1952,7 @@ void test_dwnx_conn_writev_stream(void) {
 
   /* Write empty STREAM frame */
   setup_default_client(&conn);
-  dwnx_read_transport_params(conn, &params_fr, ++ts);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
 
@@ -2008,7 +1996,7 @@ void test_dwnx_conn_writev_stream(void) {
 
   /* Write STREAM frame with FIN */
   setup_default_client(&conn);
-  dwnx_read_transport_params(conn, &params_fr, ++ts);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
 
@@ -2084,7 +2072,7 @@ void test_dwnx_conn_writev_stream(void) {
 
   /* Write control frames */
   setup_default_client(&conn);
-  dwnx_read_transport_params(conn, &params_fr, ++ts);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
 
@@ -2162,7 +2150,7 @@ void test_dwnx_conn_writev_stream(void) {
 
   /* Stream blocked by stream-level flow control */
   setup_default_client(&conn);
-  dwnx_read_transport_params(conn, &params_fr, ++ts);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
 

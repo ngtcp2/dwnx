@@ -175,7 +175,7 @@ void dwnx_write_record(dwnx_buf *dest, const dwnx_frame *fr, size_t n) {
 }
 
 void dwnx_read_transport_params(dwnx_conn *conn,
-                                const dwnx_frame_qx_transport_parameters *fr,
+                                const dwnx_transport_params *remote_params,
                                 dwnx_tstamp ts) {
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -184,7 +184,11 @@ void dwnx_read_transport_params(dwnx_conn *conn,
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
   dwnx_write_record(&buf,
                     &(dwnx_frame){
-                      .qx_transport_parameters = *fr,
+                      .qx_transport_parameters =
+                        (dwnx_frame_qx_transport_parameters){
+                          .type = DWNX_FRAME_QX_TRANSPORT_PARAMETERS,
+                          .params = remote_params,
+                        },
                     },
                     1);
 
