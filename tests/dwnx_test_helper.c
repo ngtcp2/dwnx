@@ -34,7 +34,6 @@
 void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
   uint8_t *p;
   dwnx_ssize nwrite;
-  uint8_t flags;
 
   switch (fr->hd.type) {
   case DWNX_FRAME_QX_TRANSPORT_PARAMETERS:
@@ -62,27 +61,18 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
 
     return;
   case DWNX_FRAME_STREAM:
-    flags = fr->stream.flags;
-    if (fr->stream.offset) {
-      flags |= DWNX_STREAM_OFF_BIT;
-    }
+    /* fin must be indicated by DWNX_STREAM_FIN_BIT in flags */
+    assert(0 == fr->stream.fin);
 
-    if (fr->stream.len) {
-      flags |= DWNX_STREAM_LEN_BIT;
-    }
-
-    if (fr->stream.fin) {
-      flags |= DWNX_STREAM_FIN_BIT;
-    }
-
-    dest->last = dwnx_put_uvarint(dest->last, fr->stream.type | flags);
+    dest->last =
+      dwnx_put_uvarint(dest->last, fr->stream.type | fr->stream.flags);
     dest->last = dwnx_put_uvarint(dest->last, (uint64_t)fr->stream.stream_id);
 
-    if (flags & DWNX_STREAM_OFF_BIT) {
+    if (fr->stream.flags & DWNX_STREAM_OFF_BIT) {
       dest->last = dwnx_put_uvarint(dest->last, fr->stream.offset);
     }
 
-    if (flags & DWNX_STREAM_LEN_BIT) {
+    if (fr->stream.flags & DWNX_STREAM_LEN_BIT) {
       dest->last = dwnx_put_uvarint(dest->last, fr->stream.len);
     }
 

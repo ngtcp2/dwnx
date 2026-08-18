@@ -500,6 +500,74 @@ void test_dwnx_conn_recv_stream(void) {
 
   dwnx_conn_del(conn);
 
+  /* With FIN and LEN bits set */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_FIN_BIT | DWNX_STREAM_LEN_BIT,
+    .len = 100,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.stream_open.ncalled);
+  assert_int64(0, ==, ud.stream_open.stream_id);
+  assert_size(1, ==, ud.recv_stream_data.ncalled);
+  assert_int64(0, ==, ud.recv_stream_data.stream_id);
+  assert_uint64(0, ==, ud.recv_stream_data.offset);
+  assert_size(100, ==, ud.recv_stream_data.datalen);
+  assert_uint32(DWNX_STREAM_DATA_FLAG_FIN, ==, ud.recv_stream_data.flags);
+
+  dwnx_conn_del(conn);
+
+  /* With OFF and LEN bits set */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_OFF_BIT | DWNX_STREAM_LEN_BIT,
+    .len = 100,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.stream_open.ncalled);
+  assert_int64(0, ==, ud.stream_open.stream_id);
+  assert_size(1, ==, ud.recv_stream_data.ncalled);
+  assert_int64(0, ==, ud.recv_stream_data.stream_id);
+  assert_uint64(0, ==, ud.recv_stream_data.offset);
+  assert_size(100, ==, ud.recv_stream_data.datalen);
+  assert_uint32(DWNX_STREAM_DATA_FLAG_NONE, ==, ud.recv_stream_data.flags);
+
+  dwnx_conn_del(conn);
+
   /* With FIN bit set */
   opts = (conn_options){
     .callbacks = &callbacks,
@@ -531,6 +599,98 @@ void test_dwnx_conn_recv_stream(void) {
   assert_uint64(0, ==, ud.recv_stream_data.offset);
   assert_size(100, ==, ud.recv_stream_data.datalen);
   assert_uint32(DWNX_STREAM_DATA_FLAG_FIN, ==, ud.recv_stream_data.flags);
+
+  dwnx_conn_del(conn);
+
+  /* With OFF bit set */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_OFF_BIT,
+    .len = 100,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.stream_open.ncalled);
+  assert_int64(0, ==, ud.stream_open.stream_id);
+  assert_size(1, ==, ud.recv_stream_data.ncalled);
+  assert_int64(0, ==, ud.recv_stream_data.stream_id);
+  assert_uint64(0, ==, ud.recv_stream_data.offset);
+  assert_size(100, ==, ud.recv_stream_data.datalen);
+  assert_uint32(DWNX_STREAM_DATA_FLAG_NONE, ==, ud.recv_stream_data.flags);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_OFF_BIT,
+    .offset = 100,
+    .len = 99,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(0, ==, ud.stream_open.ncalled);
+  assert_size(1, ==, ud.recv_stream_data.ncalled);
+  assert_int64(0, ==, ud.recv_stream_data.stream_id);
+  assert_uint64(100, ==, ud.recv_stream_data.offset);
+  assert_size(99, ==, ud.recv_stream_data.datalen);
+  assert_uint32(DWNX_STREAM_DATA_FLAG_NONE, ==, ud.recv_stream_data.flags);
+
+  dwnx_conn_del(conn);
+
+  /* With LEN bit set */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_LEN_BIT,
+    .len = 100,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.stream_open.ncalled);
+  assert_int64(0, ==, ud.stream_open.stream_id);
+  assert_size(1, ==, ud.recv_stream_data.ncalled);
+  assert_int64(0, ==, ud.recv_stream_data.stream_id);
+  assert_uint64(0, ==, ud.recv_stream_data.offset);
+  assert_size(100, ==, ud.recv_stream_data.datalen);
+  assert_uint32(DWNX_STREAM_DATA_FLAG_NONE, ==, ud.recv_stream_data.flags);
 
   dwnx_conn_del(conn);
 
@@ -617,6 +777,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_LEN_BIT,
     .stream_id = 4,
     .len = 99,
   };
@@ -773,7 +934,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
-    .flags = DWNX_STREAM_FIN_BIT,
+    .flags = DWNX_STREAM_FIN_BIT | DWNX_STREAM_LEN_BIT,
     .stream_id = 4,
     .len = 99,
   };
@@ -845,8 +1006,8 @@ void test_dwnx_conn_recv_reset_stream(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_FIN_BIT,
     .stream_id = 2,
-    .fin = 1,
   };
 
   dwnx_buf_reset(&buf);
@@ -894,6 +1055,7 @@ void test_dwnx_conn_recv_stop_sending(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_LEN_BIT,
     .stream_id = 4,
     .len = 99,
   };
@@ -1000,8 +1162,8 @@ void test_dwnx_conn_recv_stop_sending(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_FIN_BIT | DWNX_STREAM_LEN_BIT,
     .stream_id = 4,
-    .fin = 1,
     .len = 99,
   };
   fr[1].stop_sending = (dwnx_frame_stop_sending){
