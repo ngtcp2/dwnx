@@ -617,6 +617,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_LEN_BIT,
     .stream_id = 4,
     .len = 99,
   };
@@ -773,7 +774,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
-    .flags = DWNX_STREAM_FIN_BIT,
+    .flags = DWNX_STREAM_FIN_BIT | DWNX_STREAM_LEN_BIT,
     .stream_id = 4,
     .len = 99,
   };
@@ -845,8 +846,8 @@ void test_dwnx_conn_recv_reset_stream(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_FIN_BIT,
     .stream_id = 2,
-    .fin = 1,
   };
 
   dwnx_buf_reset(&buf);
@@ -894,6 +895,7 @@ void test_dwnx_conn_recv_stop_sending(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_LEN_BIT,
     .stream_id = 4,
     .len = 99,
   };
@@ -1000,8 +1002,8 @@ void test_dwnx_conn_recv_stop_sending(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_FIN_BIT | DWNX_STREAM_LEN_BIT,
     .stream_id = 4,
-    .fin = 1,
     .len = 99,
   };
   fr[1].stop_sending = (dwnx_frame_stop_sending){
