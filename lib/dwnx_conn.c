@@ -1155,6 +1155,26 @@ static int conn_recv_max_streams(dwnx_conn *conn,
   return conn_call_extend_max_local_streams_uni(conn, fr->max_streams);
 }
 
+static int conn_recv_streams_blocked(dwnx_conn *conn,
+                                     const dwnx_frame_streams_blocked *fr,
+                                     dwnx_tstamp ts) {
+  (void)ts;
+
+  if (fr->type == DWNX_FRAME_STREAMS_BLOCKED_BIDI) {
+    if (fr->max_streams > conn->rx.bidi.max_streams) {
+      return DWNX_ERR_STREAM_LIMIT;
+    }
+
+    return 0;
+  }
+
+  if (fr->max_streams > conn->rx.uni.max_streams) {
+    return DWNX_ERR_STREAM_LIMIT;
+  }
+
+  return 0;
+}
+
 int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
                    dwnx_tstamp ts) {
   const uint8_t *p, *end;
@@ -1976,7 +1996,10 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
-      /* TODO: Process STREAMS_BLOCKED */
+      rv = conn_recv_streams_blocked(conn, &rcrd->fr.streams_blocked, ts);
+      if (rv != 0) {
+        return rv;
+      }
 
       goto frame_done;
     case DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_ERROR_CODE:
