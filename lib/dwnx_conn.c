@@ -1175,6 +1175,18 @@ static int conn_recv_streams_blocked(dwnx_conn *conn,
   return 0;
 }
 
+static int conn_recv_data_blocked(dwnx_conn *conn,
+                                  const dwnx_frame_data_blocked *fr,
+                                  dwnx_tstamp ts) {
+  (void)ts;
+
+  if (fr->offset > conn->rx.max_offset) {
+    return DWNX_ERR_FLOW_CONTROL;
+  }
+
+  return 0;
+}
+
 int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
                    dwnx_tstamp ts) {
   const uint8_t *p, *end;
@@ -1924,7 +1936,10 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
-      /* TODO: Process DATA_BLOCKED */
+      rv = conn_recv_data_blocked(conn, &rcrd->fr.data_blocked, ts);
+      if (rv != 0) {
+        return rv;
+      }
 
       goto frame_done;
     case DWNX_RECORD_READ_STATE_STREAM_DATA_BLOCKED_STREAM_ID:

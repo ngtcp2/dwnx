@@ -1531,7 +1531,7 @@ void test_dwnx_conn_recv_data_blocked(void) {
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = 64 * 1024,
+    .offset = conn->rx.max_offset,
   };
 
   dwnx_write_record(&buf, &fr, 1);
@@ -1545,13 +1545,32 @@ void test_dwnx_conn_recv_data_blocked(void) {
 
   dwnx_conn_del(conn);
 
+  /* Receiving an offset that is larger than the local endpoint
+     allows. */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.data_blocked = (dwnx_frame_data_blocked){
+    .type = DWNX_FRAME_DATA_BLOCKED,
+    .offset = conn->rx.max_offset + 1,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_FLOW_CONTROL, ==, rv);
+
+  dwnx_conn_del(conn);
+
   /* Receive 1 byte at a time */
   setup_default_server(&conn);
   dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = 64 * 1024,
+    .offset = conn->rx.max_offset,
   };
 
   dwnx_buf_reset(&buf);
