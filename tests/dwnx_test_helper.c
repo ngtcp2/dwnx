@@ -202,3 +202,27 @@ const uint8_t *dwnx_read_recordlen(uint64_t *plen, const uint8_t *data,
 
   return dwnx_get_uvarint(plen, data);
 }
+
+int64_t dwnx_nth_local_bidi_stream_id(dwnx_conn *conn, uint64_t n) {
+  assert(n != 0);
+
+  return (int64_t)(((n - 1) << 2) | (conn->server ? 0x1 : 0x0));
+}
+
+int64_t dwnx_nth_remote_bidi_stream_id(dwnx_conn *conn, uint64_t n) {
+  assert(n != 0);
+
+  return (int64_t)(((n - 1) << 2) | (conn->server ? 0x0 : 0x1));
+}
+
+int64_t dwnx_nth_local_uni_stream_id(dwnx_conn *conn, uint64_t n) {
+  assert(n != 0);
+
+  return (int64_t)(((n - 1) << 2) | 0x2 | (conn->server ? 0x1 : 0x0));
+}
+
+int64_t dwnx_nth_remote_uni_stream_id(dwnx_conn *conn, uint64_t n) {
+  assert(n != 0);
+
+  return (int64_t)(((n - 1) << 2) | 0x2 | (conn->server ? 0x0 : 0x1));
+}

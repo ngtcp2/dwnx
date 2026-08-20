@@ -1187,6 +1187,77 @@ static int conn_recv_data_blocked(dwnx_conn *conn,
   return 0;
 }
 
+static int conn_recv_stream_data_blocked(
+  dwnx_conn *conn, const dwnx_frame_stream_data_blocked *fr, dwnx_tstamp ts) {
+  int local_stream = conn_local_stream(conn, fr->stream_id);
+  int bidi = bidi_stream(fr->stream_id);
+  dwnx_strm *strm;
+  dwnx_idtr *idtr;
+  (void)ts;
+
+  if (bidi) {
+    if (local_stream) {
+      if (conn->tx.bidi.next_stream_id <= fr->stream_id) {
+        return DWNX_ERR_STREAM_STATE;
+      }
+    } else if (conn->rx.bidi.max_streams < dwnx_ord_stream_id(fr->stream_id)) {
+      return DWNX_ERR_STREAM_LIMIT;
+    }
+
+    idtr = &conn->bidi.idtr;
+  } else {
+    if (local_stream) {
+      return DWNX_ERR_STREAM_STATE;
+    }
+
+    if (conn->rx.uni.max_streams < dwnx_ord_stream_id(fr->stream_id)) {
+      return DWNX_ERR_STREAM_LIMIT;
+    }
+
+    idtr = &conn->uni.idtr;
+  }
+
+  strm = dwnx_conn_find_stream(conn, fr->stream_id);
+  if (!strm) {
+    if (local_stream || dwnx_idtr_is_open(idtr, fr->stream_id)) {
+      /* The stream has been closed. */
+      return DWNX_ERR_PROTO;
+    }
+
+    if (bidi) {
+      if (conn->local.transport_params.initial_max_stream_data_bidi_remote <
+          fr->offset) {
+        return DWNX_ERR_FLOW_CONTROL;
+      }
+    } else if (conn->local.transport_params.initial_max_stream_data_uni <
+               fr->offset) {
+      return DWNX_ERR_FLOW_CONTROL;
+    }
+
+    /* Allow transport parameter data limit < fr->offset case.  This
+       is fine for 0RTT, where server extends limits. */
+
+    if (conn_max_data_violated(conn, fr->offset)) {
+      return DWNX_ERR_FLOW_CONTROL;
+    }
+  } else {
+    if ((strm->flags & DWNX_STRM_FLAG_SHUT_RD) ||
+        strm->rx.last_offset > fr->offset) {
+      return DWNX_ERR_PROTO;
+    }
+
+    if (strm->rx.max_offset < fr->offset ||
+        conn_max_data_violated(conn, fr->offset - strm->rx.last_offset)) {
+      return DWNX_ERR_FLOW_CONTROL;
+    }
+
+    /* RFC 9000 does not say that fr->offset must be equal to
+       strm->rx.last_offset.  We might tighten it later. */
+  }
+
+  return 0;
+}
+
 int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
                    dwnx_tstamp ts) {
   const uint8_t *p, *end;
@@ -1989,7 +2060,11 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
       dwnx_log_rx_fr(&conn->log, &rcrd->fr);
 
-      /* TODO: Process STREAM_DATA_BLOCKED */
+      rv =
+        conn_recv_stream_data_blocked(conn, &rcrd->fr.stream_data_blocked, ts);
+      if (rv != 0) {
+        return rv;
+      }
 
       goto frame_done;
     case DWNX_RECORD_READ_STATE_STREAMS_BLOCKED_MAX_STREAMS:

@@ -64,4 +64,12 @@ void dwnx_read_transport_params(dwnx_conn *conn,
 const uint8_t *dwnx_read_recordlen(uint64_t *plen, const uint8_t *data,
                                    size_t datalen);
 
+int64_t dwnx_nth_local_bidi_stream_id(dwnx_conn *conn, uint64_t n);
+
+int64_t dwnx_nth_remote_bidi_stream_id(dwnx_conn *conn, uint64_t n);
+
+int64_t dwnx_nth_local_uni_stream_id(dwnx_conn *conn, uint64_t n);
+
+int64_t dwnx_nth_remote_uni_stream_id(dwnx_conn *conn, uint64_t n);
+
 #endif /* !defined(DWNX_TEST_HELPER_H) */
