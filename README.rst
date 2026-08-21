@@ -8,6 +8,11 @@ implementation in C.
 It closely follows the API design of the original QUIC implementation
 `ngtcp2 <https://github.com/ngtcp2/ngtcp2>`_.
 
+Documentation
+-------------
+
+`Online documentation <https://nghttp2.org/dwnx/>`_ is available.
+
 Requirements
 ------------
 
