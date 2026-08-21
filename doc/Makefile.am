@@ -20,3 +20,32 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+# Minimal makefile for Sphinx documentation
+#
+
+# You can set these variables from the command line, and also
+# from the environment for the first two.
+SPHINXOPTS    ?=
+SPHINXBUILD   ?= sphinx-build
+SOURCEDIR     = $(top_srcdir)/doc/source
+BUILDDIR      = build
+
+# Put it first so that "make" without argument is like "make help".
+help:
+	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+.PHONY: help html apiref
+
+apiref: $(top_srcdir)/doc/mkapiref.py \
+	$(top_builddir)/lib/includes/dwnx/version.h \
+	$(top_srcdir)/lib/includes/dwnx/dwnx.h
+	$(top_srcdir)/doc/mkapiref.py \
+	source/apiref.rst source/macros.rst source/enums.rst source/types.rst \
+	source $(wordlist 2, $(words $^), $^)
+
+html-local: apiref
+	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+
+clean-local:
+	-rm -rf "$(BUILDDIR)"

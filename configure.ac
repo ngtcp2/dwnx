@@ -400,6 +400,7 @@ AC_CONFIG_FILES([
   lib/includes/dwnx/version.h
   tests/Makefile
   doc/Makefile
+  doc/source/conf.py
   third-party/Makefile
   examples/Makefile
 ])
