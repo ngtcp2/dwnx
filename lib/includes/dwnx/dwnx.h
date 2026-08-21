@@ -571,6 +571,11 @@ typedef uint64_t dwnx_duration;
  */
 #define DWNX_MINUTES ((dwnx_duration)(60ULL * DWNX_SECONDS))
 
+/**
+ * @struct
+ *
+ * :type:`dwnx_transport_params` represents QUIC transport parameters.
+ */
 typedef struct dwnx_transport_params {
   /**
    * :member:`initial_max_stream_data_bidi_local` is the size of flow
@@ -1344,8 +1349,9 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  * The rule of this function call is keep calling this function until
  * it returns 0 or a positive integer, or the negative error code
  * other than :macro:`DWNX_ERR_WRITE_MORE`,
- * `DWNX_ERR_STREAM_DATA_BLOCKED`, and `DWNX_ERR_STREAM_SHUT_WR`.  If
- * the function returns 0, it means that there is nothing to send.
+ * :macro:`DWNX_ERR_STREAM_DATA_BLOCKED`, and
+ * :macro:`DWNX_ERR_STREAM_SHUT_WR`.  If the function returns 0, it
+ * means that there is nothing to send.
  *
  * This function must not be called from inside the callback
  * functions.
