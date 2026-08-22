@@ -55,6 +55,11 @@ dwnx_ssize dwnx_frame_encode(uint8_t *out, size_t outlen,
   case DWNX_FRAME_MAX_STREAMS_BIDI:
   case DWNX_FRAME_MAX_STREAMS_UNI:
     return dwnx_frame_encode_max_streams(out, outlen, &fr->max_streams);
+  case DWNX_FRAME_DATA_BLOCKED:
+    return dwnx_frame_encode_data_blocked(out, outlen, &fr->data_blocked);
+  case DWNX_FRAME_STREAM_DATA_BLOCKED:
+    return dwnx_frame_encode_stream_data_blocked(out, outlen,
+                                                 &fr->stream_data_blocked);
   default:
     dwnx_unreachable();
   }
@@ -261,6 +266,46 @@ dwnx_ssize dwnx_frame_encode_max_streams(uint8_t *out, size_t outlen,
 
   *p++ = (uint8_t)fr->type;
   p = dwnx_put_uvarint(p, fr->max_streams);
+
+  assert((size_t)(p - out) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_encode_data_blocked(uint8_t *out, size_t outlen,
+                                          const dwnx_frame_data_blocked *fr) {
+  size_t len = 1 + dwnx_put_uvarintlen(fr->offset);
+  uint8_t *p;
+
+  if (outlen < len) {
+    return DWNX_ERR_NOBUF;
+  }
+
+  p = out;
+
+  *p++ = DWNX_FRAME_DATA_BLOCKED;
+  p = dwnx_put_uvarint(p, fr->offset);
+
+  assert((size_t)(p - out) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_encode_stream_data_blocked(
+  uint8_t *out, size_t outlen, const dwnx_frame_stream_data_blocked *fr) {
+  size_t len = 1 + dwnx_put_uvarintlen((uint64_t)fr->stream_id) +
+               dwnx_put_uvarintlen(fr->offset);
+  uint8_t *p;
+
+  if (outlen < len) {
+    return DWNX_ERR_NOBUF;
+  }
+
+  p = out;
+
+  *p++ = DWNX_FRAME_STREAM_DATA_BLOCKED;
+  p = dwnx_put_uvarint(p, (uint64_t)fr->stream_id);
+  p = dwnx_put_uvarint(p, fr->offset);
 
   assert((size_t)(p - out) == len);
 

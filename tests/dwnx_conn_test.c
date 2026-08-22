@@ -53,6 +53,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_qx_ping),
   munit_void_test(test_dwnx_conn_extend_max_stream_offset),
   munit_void_test(test_dwnx_conn_writev_stream),
+  munit_void_test(test_dwnx_conn_send_stream_data_blocked),
   munit_test_end(),
 };
 
@@ -3006,7 +3007,7 @@ void test_dwnx_conn_writev_stream(void) {
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
   nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), >, nread);
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_false(fr.stream.fin);
@@ -3014,6 +3015,299 @@ void test_dwnx_conn_writev_stream(void) {
   assert_uint64(8237, ==, fr.stream.len);
   assert_size(1, ==, fr.stream.datacnt);
   assert_size(fr.stream.len, ==, fr.stream.data[0].len);
+
+  buf.pos += nread;
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
+  assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
+  assert_uint64(16339 + 8237, ==, fr.stream_data_blocked.offset);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_send_stream_data_blocked(void) {
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_tstamp ts = 0;
+  dwnx_transport_params remote_params;
+  dwnx_ssize datalen;
+  dwnx_ssize nwrite, nread;
+  dwnx_frd frd;
+  dwnx_frame fr;
+  dwnx_strm *strm;
+  int64_t stream_id;
+  uint64_t rclen;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+  dwnx_frd_init(&frd);
+
+  /* Blocked by both stream and connection level flow control
+     limits without writing any data */
+  setup_default_client(&conn);
+  dwnx_transport_params_default(&remote_params);
+  remote_params.initial_max_streams_bidi = 1;
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  nwrite = dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), &datalen,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
+                                  nulldata, sizeof(nulldata), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(-1, ==, datalen);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff(0, <, nread);
+  assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
+  assert_uint64(0, ==, fr.data_blocked.offset);
+
+  buf.pos += nread;
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
+  assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
+  assert_uint64(0, ==, fr.stream_data_blocked.offset);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_false(strm->flags & DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED);
+  assert_uint64(strm->tx.offset, ==, strm->tx.last_blocked_offset);
+  assert_uint64(conn->tx.offset, ==, conn->tx.last_blocked_offset);
+
+  dwnx_conn_del(conn);
+
+  /* Blocked by both stream and connection level flow control limits
+     after writing some data */
+  setup_default_client(&conn);
+  dwnx_transport_params_default(&remote_params);
+  remote_params.initial_max_streams_bidi = 1;
+  remote_params.initial_max_stream_data_bidi_remote = 77;
+  remote_params.initial_max_data = 77;
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), &datalen,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
+                                  nulldata, sizeof(nulldata), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(77, ==, datalen);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff(0, <, nread);
+  assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
+  assert_int64(stream_id, ==, fr.stream.stream_id);
+  assert_uint64(77, ==, fr.stream.len);
+
+  buf.pos += nread;
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff(0, <, nread);
+  assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
+  assert_uint64(77, ==, fr.data_blocked.offset);
+
+  buf.pos += nread;
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
+  assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
+  assert_uint64(77, ==, fr.stream_data_blocked.offset);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_false(strm->flags & DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED);
+  assert_uint64(strm->tx.offset, ==, strm->tx.last_blocked_offset);
+  assert_uint64(conn->tx.offset, ==, conn->tx.last_blocked_offset);
+
+  dwnx_conn_del(conn);
+
+  /* No space to write stream blocked frame before writing any
+     data. */
+  setup_default_client(&conn);
+  dwnx_transport_params_default(&remote_params);
+  remote_params.initial_max_streams_bidi = 1;
+  remote_params.initial_max_stream_data_bidi_remote = 77;
+  remote_params.initial_max_data = 78;
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_stream(conn, buf.last, 84, &datalen,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
+                                  nulldata, 77, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
+  assert_ptrdiff(77, ==, datalen);
+
+  nwrite = dwnx_conn_write_stream(conn, buf.last, 84, &datalen,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
+                                  nulldata, 77, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_STREAM_DATA_BLOCKED, ==, nwrite);
+  assert_ptrdiff(-1, ==, datalen);
+
+  nwrite = dwnx_conn_write_stream(
+    conn, buf.last, 84, NULL, DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
+  assert_int64(stream_id, ==, fr.stream.stream_id);
+  assert_uint64(77, ==, fr.stream.len);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED);
+  assert_uint64(strm->tx.offset, !=, strm->tx.last_blocked_offset);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
+  assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
+  assert_uint64(77, ==, fr.stream_data_blocked.offset);
+
+  dwnx_conn_del(conn);
+
+  /* No space to write stream blocked frame after writing some
+     data. */
+  setup_default_client(&conn);
+  dwnx_transport_params_default(&remote_params);
+  remote_params.initial_max_streams_bidi = 1;
+  remote_params.initial_max_stream_data_bidi_remote = 77;
+  remote_params.initial_max_data = 77;
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_stream(conn, buf.last, 87, &datalen,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
+                                  nulldata, sizeof(nulldata), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(77, ==, datalen);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff(0, <, nread);
+  assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
+  assert_int64(stream_id, ==, fr.stream.stream_id);
+  assert_uint64(77, ==, fr.stream.len);
+
+  buf.pos += nread;
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
+  assert_uint64(77, ==, fr.data_blocked.offset);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED);
+  assert_uint64(strm->tx.offset, !=, strm->tx.last_blocked_offset);
+  assert_uint64(conn->tx.offset, ==, conn->tx.last_blocked_offset);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), &datalen,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
+                                  nulldata, sizeof(nulldata), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(-1, ==, datalen);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
+  assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
+  assert_uint64(77, ==, fr.stream_data_blocked.offset);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_false(strm->flags & DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED);
+  assert_uint64(strm->tx.offset, ==, strm->tx.last_blocked_offset);
+  assert_uint64(conn->tx.offset, ==, conn->tx.last_blocked_offset);
 
   dwnx_conn_del(conn);
 }

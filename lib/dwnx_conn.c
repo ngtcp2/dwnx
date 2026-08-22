@@ -351,6 +351,7 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   conn->rx.uni.unsent_max_streams = params->initial_max_streams_uni;
   conn->rx.uni.max_streams = params->initial_max_streams_uni;
   conn->tx.ping.last_seq = -1;
+  conn->tx.last_blocked_offset = UINT64_MAX;
 
   *pconn = conn;
 
@@ -2363,6 +2364,16 @@ int dwnx_conn_tx_strmq_push(dwnx_conn *conn, dwnx_strm *strm) {
   return dwnx_pq_push(&conn->tx.strmq, &strm->pe);
 }
 
+int dwnx_conn_tx_strmq_push_if_not(dwnx_conn *conn, dwnx_strm *strm) {
+  if (dwnx_strm_is_tx_queued(strm)) {
+    return 0;
+  }
+
+  strm->cycle = dwnx_conn_tx_strmq_first_cycle(conn);
+
+  return dwnx_conn_tx_strmq_push(conn, strm);
+}
+
 /*
  * conn_shutdown_stream_write closes send stream with error code
  * |app_error_code|.  RESET_STREAM frame is scheduled.
@@ -2772,10 +2783,78 @@ int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts) {
       strm->rx.max_offset = strm->rx.unsent_max_offset;
     }
 
+    if (strm->flags & DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED) {
+      if (!(strm->flags & DWNX_STRM_FLAG_SHUT_WR) &&
+          ((rv = dwnx_conn_write_data_blocked(conn, ts)) != 0 ||
+           (rv = dwnx_conn_write_stream_data_blocked(conn, strm, ts)) != 0)) {
+        return rv;
+      }
+
+      strm->flags &= ~DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED;
+    }
+
     dwnx_conn_tx_strmq_pop(conn);
   }
 
   return dwnx_conn_write_max_streams(conn, ts);
+}
+
+int dwnx_conn_write_data_blocked(dwnx_conn *conn, dwnx_tstamp ts) {
+  dwnx_qre *qre = &conn->tx.qre;
+  dwnx_frame fr;
+  int rv;
+  (void)ts;
+
+  if (conn->tx.offset < conn->tx.max_offset ||
+      conn->tx.offset == conn->tx.last_blocked_offset) {
+    return 0;
+  }
+
+  assert(conn->tx.offset == conn->tx.max_offset);
+
+  fr.data_blocked = (dwnx_frame_data_blocked){
+    .type = DWNX_FRAME_DATA_BLOCKED,
+    .offset = conn->tx.offset,
+  };
+
+  rv = dwnx_qre_encode_frame(qre, &fr);
+  if (rv != 0) {
+    return rv;
+  }
+
+  conn->tx.last_blocked_offset = conn->tx.offset;
+
+  return 0;
+}
+
+int dwnx_conn_write_stream_data_blocked(dwnx_conn *conn, dwnx_strm *strm,
+                                        dwnx_tstamp ts) {
+  dwnx_qre *qre = &conn->tx.qre;
+  dwnx_frame fr;
+  int rv;
+  (void)ts;
+
+  if (strm->tx.offset < strm->tx.max_offset ||
+      strm->tx.offset == strm->tx.last_blocked_offset) {
+    return 0;
+  }
+
+  assert(strm->tx.offset == strm->tx.max_offset);
+
+  fr.stream_data_blocked = (dwnx_frame_stream_data_blocked){
+    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .stream_id = strm->stream_id,
+    .offset = strm->tx.offset,
+  };
+
+  rv = dwnx_qre_encode_frame(qre, &fr);
+  if (rv != 0) {
+    return rv;
+  }
+
+  strm->tx.last_blocked_offset = strm->tx.offset;
+
+  return 0;
 }
 
 int dwnx_conn_write_max_streams(dwnx_conn *conn, dwnx_tstamp ts) {
@@ -2847,6 +2926,20 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
 
   /* 0 length STREAM frame is allowed */
   if (ndatalen == 0 && datalen) {
+    if ((rv = dwnx_conn_write_data_blocked(conn, ts)) != 0 ||
+        (rv = dwnx_conn_write_stream_data_blocked(conn, strm, ts)) != 0) {
+      if (rv != DWNX_ERR_NOBUF) {
+        return rv;
+      }
+
+      strm->flags |= DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED;
+
+      rv = dwnx_conn_tx_strmq_push_if_not(conn, strm);
+      if (rv != 0) {
+        return rv;
+      }
+    }
+
     if (dwnx_conn_get_max_data_left(conn)) {
       return DWNX_ERR_STREAM_DATA_BLOCKED;
     }
@@ -2892,6 +2985,20 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
     dwnx_strm_shutdown(strm, DWNX_STRM_FLAG_SHUT_WR);
 
     rv = dwnx_conn_close_stream_if_shut_rdwr(conn, strm);
+    if (rv != 0) {
+      return rv;
+    }
+  } else if (ndatalen < datalen &&
+             ((rv = dwnx_conn_write_data_blocked(conn, ts)) != 0 ||
+              (rv = dwnx_conn_write_stream_data_blocked(conn, strm, ts)) !=
+                0)) {
+    if (rv != DWNX_ERR_NOBUF) {
+      return rv;
+    }
+
+    strm->flags |= DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED;
+
+    rv = dwnx_conn_tx_strmq_push_if_not(conn, strm);
     if (rv != 0) {
       return rv;
     }

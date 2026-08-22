@@ -73,6 +73,9 @@
 /* DWNX_STRM_FLAG_TX_STOP_SENDING_APP_ERROR_CODE_SET is set when
    dwnx_strm.tx.stop_sending_app_error_code is set. */
 #define DWNX_STRM_FLAG_TX_STOP_SENDING_APP_ERROR_CODE_SET 0x10000U
+/* DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED is set when
+   STREAM_DATA_BLOCKED and/or DATA_BLOCKED frames should be sent. */
+#define DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED 0x20000U
 
 typedef struct dwnx_strm {
   const dwnx_mem *mem;

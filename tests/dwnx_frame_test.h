@@ -42,6 +42,8 @@ munit_void_test_decl(test_dwnx_frame_encode_stop_sending)
 munit_void_test_decl(test_dwnx_frame_encode_max_data)
 munit_void_test_decl(test_dwnx_frame_encode_max_stream_data)
 munit_void_test_decl(test_dwnx_frame_encode_max_streams)
+munit_void_test_decl(test_dwnx_frame_encode_data_blocked)
+munit_void_test_decl(test_dwnx_frame_encode_stream_data_blocked)
 munit_void_test_decl(test_dwnx_frame_encode_qx_ping)
 
 #endif /* !defined(DWNX_FRAME_TEST_H) */
