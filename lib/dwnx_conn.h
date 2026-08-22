@@ -125,6 +125,9 @@ struct dwnx_conn {
     /* max_offset is the maximum offset that local endpoint can
        send. */
     uint64_t max_offset;
+    /* last_blocked_offset is the offset that was sent along with
+       DATA_BLOCKED frame last time. */
+    uint64_t last_blocked_offset;
 
     struct {
       /* last_seq is the last sequence number in QX_PING_REQUEST frame
@@ -197,6 +200,18 @@ void dwnx_conn_tx_strmq_pop(dwnx_conn *conn);
  */
 int dwnx_conn_tx_strmq_push(dwnx_conn *conn, dwnx_strm *strm);
 
+/*
+ * dwnx_conn_tx_strmq_push_if_not pushes |strm| into |conn|->tx.strmq
+ * if it is not pushed yet.
+ *
+ *  This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * DWNX_ERR_NOMEM
+ *     Out of memory.
+ */
+int dwnx_conn_tx_strmq_push_if_not(dwnx_conn *conn, dwnx_strm *strm);
+
 typedef enum dwnx_vmsg_type {
   DWNX_VMSG_TYPE_STREAM,
 } dwnx_vmsg_type;
@@ -230,6 +245,11 @@ dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
 int dwnx_conn_write_transport_params(dwnx_conn *conn, dwnx_tstamp ts);
 
 int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts);
+
+int dwnx_conn_write_data_blocked(dwnx_conn *conn, dwnx_tstamp ts);
+
+int dwnx_conn_write_stream_data_blocked(dwnx_conn *conn, dwnx_strm *strm,
+                                        dwnx_tstamp ts);
 
 int dwnx_conn_write_max_streams(dwnx_conn *conn, dwnx_tstamp ts);
 

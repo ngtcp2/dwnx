@@ -53,5 +53,6 @@ munit_void_test_decl(test_dwnx_conn_recv_padding)
 munit_void_test_decl(test_dwnx_conn_recv_qx_ping)
 munit_void_test_decl(test_dwnx_conn_extend_max_stream_offset)
 munit_void_test_decl(test_dwnx_conn_writev_stream)
+munit_void_test_decl(test_dwnx_conn_send_stream_data_blocked)
 
 #endif /* !defined(DWNX_CONN_TEST_H) */

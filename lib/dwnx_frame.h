@@ -278,6 +278,33 @@ dwnx_frame_encode_max_stream_data(uint8_t *out, size_t outlen,
 dwnx_ssize dwnx_frame_encode_max_streams(uint8_t *out, size_t outlen,
                                          const dwnx_frame_max_streams *fr);
 
+/*
+ * dwnx_frame_encode_data_blocked encodes DATA_BLOCKED frame |fr| into
+ * the buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_data_blocked(uint8_t *out, size_t outlen,
+                                          const dwnx_frame_data_blocked *fr);
+
+/*
+ * dwnx_frame_encode_stream_data_blocked encodes STREAM_DATA_BLOCKED
+ * frame |fr| into the buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize
+dwnx_frame_encode_stream_data_blocked(uint8_t *out, size_t outlen,
+                                      const dwnx_frame_stream_data_blocked *fr);
+
 typedef struct dwnx_frd {
   union {
     dwnx_vec data;

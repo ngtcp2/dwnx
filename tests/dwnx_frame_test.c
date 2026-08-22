@@ -39,6 +39,8 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_frame_encode_max_data),
   munit_void_test(test_dwnx_frame_encode_max_stream_data),
   munit_void_test(test_dwnx_frame_encode_max_streams),
+  munit_void_test(test_dwnx_frame_encode_data_blocked),
+  munit_void_test(test_dwnx_frame_encode_stream_data_blocked),
   munit_void_test(test_dwnx_frame_encode_qx_ping),
   munit_test_end(),
 };
@@ -365,6 +367,60 @@ void test_dwnx_frame_encode_max_streams(void) {
   assert_uint64(fr.max_streams, ==, nfr.max_streams);
 
   rv = dwnx_frame_encode_max_streams(buf, framelen - 1, &fr);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
+}
+
+void test_dwnx_frame_encode_data_blocked(void) {
+  uint8_t buf[16];
+  dwnx_frame_data_blocked fr, nfr;
+  dwnx_ssize rv, nread;
+  size_t framelen = 1 + 8;
+
+  fr = (dwnx_frame_data_blocked){
+    .type = DWNX_FRAME_DATA_BLOCKED,
+    .offset = DWNX_MAX_VARINT,
+  };
+
+  rv = dwnx_frame_encode_data_blocked(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_data_blocked(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_uint64(fr.offset, ==, nfr.offset);
+
+  rv = dwnx_frame_encode_data_blocked(buf, framelen - 1, &fr);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
+}
+
+void test_dwnx_frame_encode_stream_data_blocked(void) {
+  uint8_t buf[32];
+  dwnx_frame_stream_data_blocked fr, nfr;
+  dwnx_ssize rv, nread;
+  size_t framelen = 1 + 8 + 8;
+
+  fr = (dwnx_frame_stream_data_blocked){
+    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .stream_id = (int64_t)(DWNX_MAX_VARINT >> 1),
+    .offset = DWNX_MAX_VARINT,
+  };
+
+  rv = dwnx_frame_encode_stream_data_blocked(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_stream_data_blocked(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_int64(fr.stream_id, ==, nfr.stream_id);
+  assert_uint64(fr.offset, ==, nfr.offset);
+
+  rv = dwnx_frame_encode_stream_data_blocked(buf, framelen - 1, &fr);
 
   assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
 }
