@@ -476,10 +476,8 @@ int dwnx_conn_extend_max_stream_offset(dwnx_conn *conn, int64_t stream_id,
   }
 
   if (!(strm->flags & (DWNX_STRM_FLAG_SHUT_RD | DWNX_STRM_FLAG_STOP_SENDING)) &&
-      !dwnx_strm_is_tx_queued(strm) && strm_should_send_max_stream_data(strm)) {
-    strm->cycle = dwnx_conn_tx_strmq_first_cycle(conn);
-
-    return dwnx_conn_tx_strmq_push(conn, strm);
+      strm_should_send_max_stream_data(strm)) {
+    return dwnx_conn_tx_strmq_push_if_not(conn, strm);
   }
 
   return 0;
@@ -582,13 +580,7 @@ static int conn_reset_stream(dwnx_conn *conn, dwnx_strm *strm,
                  DWNX_STRM_FLAG_TX_RESET_STREAM_APP_ERROR_CODE_SET;
   strm->tx.reset_stream_app_error_code = app_error_code;
 
-  if (dwnx_strm_is_tx_queued(strm)) {
-    return 0;
-  }
-
-  strm->cycle = dwnx_conn_tx_strmq_first_cycle(conn);
-
-  return dwnx_conn_tx_strmq_push(conn, strm);
+  return dwnx_conn_tx_strmq_push_if_not(conn, strm);
 }
 
 /*
@@ -607,13 +599,7 @@ static int conn_stop_sending(dwnx_conn *conn, dwnx_strm *strm,
                  DWNX_STRM_FLAG_TX_STOP_SENDING_APP_ERROR_CODE_SET;
   strm->tx.stop_sending_app_error_code = app_error_code;
 
-  if (dwnx_strm_is_tx_queued(strm)) {
-    return 0;
-  }
-
-  strm->cycle = dwnx_conn_tx_strmq_first_cycle(conn);
-
-  return dwnx_conn_tx_strmq_push(conn, strm);
+  return dwnx_conn_tx_strmq_push_if_not(conn, strm);
 }
 
 static int set_max_stream_offset(void *data, void *ptr) {
@@ -2739,9 +2725,7 @@ int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts) {
     }
 
     if (strm->flags & DWNX_STRM_FLAG_SEND_STOP_SENDING) {
-      if (strm->flags & DWNX_STRM_FLAG_SHUT_RD) {
-        strm->flags &= ~DWNX_STRM_FLAG_SEND_STOP_SENDING;
-      } else {
+      if (!(strm->flags & DWNX_STRM_FLAG_SHUT_RD)) {
         rv = conn_call_stream_stop_sending(conn, strm->stream_id,
                                            strm->tx.stop_sending_app_error_code,
                                            strm->stream_user_data);
@@ -2761,9 +2745,9 @@ int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts) {
         if (rv != 0) {
           return rv;
         }
-
-        strm->flags &= ~DWNX_STRM_FLAG_SEND_STOP_SENDING;
       }
+
+      strm->flags &= ~DWNX_STRM_FLAG_SEND_STOP_SENDING;
     }
 
     if (!(strm->flags &
