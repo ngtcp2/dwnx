@@ -54,6 +54,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_extend_max_stream_offset),
   munit_void_test(test_dwnx_conn_writev_stream),
   munit_void_test(test_dwnx_conn_send_stream_data_blocked),
+  munit_void_test(test_dwnx_conn_handle_expiry),
   munit_test_end(),
 };
 
@@ -3308,6 +3309,51 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_false(strm->flags & DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED);
   assert_uint64(strm->tx.offset, ==, strm->tx.last_blocked_offset);
   assert_uint64(conn->tx.offset, ==, conn->tx.last_blocked_offset);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_handle_expiry(void) {
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_tstamp ts = 0;
+  dwnx_transport_params remote_params;
+  dwnx_tstamp expiry;
+  dwnx_ssize nwrite;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  setup_default_server(&conn);
+  dwnx_transport_params_default(&remote_params);
+  remote_params.max_idle_timeout = 5 * DWNX_SECONDS;
+  ts += DWNX_SECONDS;
+  dwnx_read_transport_params(conn, &remote_params, ts);
+
+  expiry = dwnx_conn_get_expiry(conn);
+
+  assert_uint64(6 * DWNX_SECONDS, ==, expiry);
+
+  ts += DWNX_SECONDS;
+  nwrite = dwnx_conn_write_stream(conn, buf.pos, dwnx_buf_left(&buf), NULL,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  expiry = dwnx_conn_get_expiry(conn);
+
+  assert_uint64(7 * DWNX_SECONDS, ==, expiry);
+
+  ts = expiry;
+
+  rv = dwnx_conn_handle_expiry(conn, ts - DWNX_NANOSECONDS);
+
+  assert_int(0, ==, rv);
+
+  rv = dwnx_conn_handle_expiry(conn, ts);
+
+  assert_int(DWNX_ERR_IDLE_CLOSE, ==, rv);
 
   dwnx_conn_del(conn);
 }

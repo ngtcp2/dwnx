@@ -126,10 +126,12 @@ void timeoutcb(struct ev_loop *loop, ev_timer *w, int revents) {
   auto c = static_cast<Client *>(w->data);
 
   if (auto rv = c->handle_expiry(); !rv) {
+    c->disconnect();
+
     return;
   }
 
-  c->disconnect();
+  c->start_wev();
 }
 } // namespace
 
@@ -138,8 +140,7 @@ Client::Client(struct ev_loop *loop) : loop_{loop} {
   rev_.data = this;
   ev_io_init(&wev_, writecb, 0, EV_WRITE);
   wev_.data = this;
-  ev_timer_init(&timer_, timeoutcb, 0.,
-                static_cast<double>(config.timeout) / DWNX_SECONDS);
+  ev_timer_init(&timer_, timeoutcb, 0., 0.);
   timer_.data = this;
 }
 
@@ -454,7 +455,6 @@ std::expected<void, Error> Client::tls_handshake() {
       return {};
     case SSL_ERROR_WANT_WRITE:
       start_wev();
-      update_timer();
       return {};
     default:
       std::println(stderr, "SSL_do_handshake: {}",
@@ -495,7 +495,22 @@ std::expected<void, Error> Client::on_read() { return read_(*this); }
 
 std::expected<void, Error> Client::on_write() { return write_(*this); }
 
-std::expected<void, Error> Client::handle_expiry() { return {}; }
+std::expected<void, Error> Client::handle_expiry() {
+  auto rv = dwnx_conn_handle_expiry(conn_, util::timestamp());
+  if (rv != 0) {
+    if (rv == DWNX_ERR_IDLE_CLOSE) {
+      if (!config.quiet) {
+        std::println(stderr, "Idle timeout");
+      }
+
+      return std::unexpected{Error::IDLE_TIMEOUT};
+    }
+
+    return std::unexpected{Error::QUIC};
+  }
+
+  return {};
+}
 
 std::expected<void, Error> Client::read_data() {
   std::array<uint8_t, 16_k> rawbuf;
@@ -510,6 +525,8 @@ std::expected<void, Error> Client::read_data() {
       auto err = SSL_get_error(ssl_, nread);
       switch (err) {
       case SSL_ERROR_WANT_READ:
+        update_timer();
+
         return {};
       case SSL_ERROR_WANT_WRITE:
         // renegotiation started
@@ -598,7 +615,29 @@ Client::send_packet_or_blocked(std::span<const uint8_t> data) {
   return {};
 }
 
-void Client::update_timer() { ev_timer_again(loop_, &timer_); }
+void Client::update_timer() {
+  auto expiry = dwnx_conn_get_expiry(conn_);
+  auto now = util::timestamp();
+
+  if (expiry <= now) {
+    if (!config.quiet) {
+      auto t = static_cast<ev_tstamp>(now - expiry) / DWNX_SECONDS;
+      std::println(stderr, "Timer has already expired: {:.9f}s", t);
+    }
+
+    ev_feed_event(loop_, &timer_, EV_TIMER);
+
+    return;
+  }
+
+  auto t = static_cast<ev_tstamp>(expiry - now) / DWNX_SECONDS;
+  if (!config.quiet) {
+    std::println(stderr, "Set timer={:.9f}s", t);
+  }
+
+  timer_.repeat = t;
+  ev_timer_again(loop_, &timer_);
+}
 
 namespace {
 std::expected<void, Error> connect_sock(Address &local_addr, int fd,
