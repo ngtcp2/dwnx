@@ -2725,9 +2725,7 @@ int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts) {
     }
 
     if (strm->flags & DWNX_STRM_FLAG_SEND_STOP_SENDING) {
-      if (strm->flags & DWNX_STRM_FLAG_SHUT_RD) {
-        strm->flags &= ~DWNX_STRM_FLAG_SEND_STOP_SENDING;
-      } else {
+      if (!(strm->flags & DWNX_STRM_FLAG_SHUT_RD)) {
         rv = conn_call_stream_stop_sending(conn, strm->stream_id,
                                            strm->tx.stop_sending_app_error_code,
                                            strm->stream_user_data);
@@ -2747,9 +2745,9 @@ int dwnx_conn_write_ctrl_frames(dwnx_conn *conn, dwnx_tstamp ts) {
         if (rv != 0) {
           return rv;
         }
-
-        strm->flags &= ~DWNX_STRM_FLAG_SEND_STOP_SENDING;
       }
+
+      strm->flags &= ~DWNX_STRM_FLAG_SEND_STOP_SENDING;
     }
 
     if (!(strm->flags &
