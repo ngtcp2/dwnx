@@ -158,6 +158,7 @@ struct dwnx_conn {
   dwnx_callbacks callbacks;
   dwnx_map strms;
   dwnx_log log;
+  dwnx_tstamp idle_ts;
   uint32_t flags;
   int server;
 };
@@ -259,5 +260,7 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
                                  dwnx_strm *strm, uint32_t flags,
                                  const dwnx_vec *datav, size_t datavcnt,
                                  dwnx_tstamp ts);
+
+dwnx_tstamp dwnx_conn_get_idle_expiry(const dwnx_conn *conn);
 
 #endif /* !defined(DWNX_CONN_H) */

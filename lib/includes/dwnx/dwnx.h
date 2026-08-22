@@ -1441,6 +1441,33 @@ dwnx_conn_get_local_transport_params(const dwnx_conn *conn);
 /**
  * @function
  *
+ * `dwnx_conn_get_expiry` returns the next expiry time.  It returns
+ * ``UINT64_MAX`` if there is no next expiry.
+ *
+ * Call `dwnx_conn_handle_expiry` when the expiry time has passed.
+ */
+DWNX_EXTERN dwnx_tstamp dwnx_conn_get_expiry(const dwnx_conn *conn);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_handle_expiry` handles expired timer.
+ *
+ * If it returns :macro:`DWNX_ERR_IDLE_CLOSE`, it means that an idle
+ * timer has fired for this particular connection.  In this case, just
+ * close the underlying connection.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_IDLE_CLOSE`
+ *     The idle timer has fired.
+ */
+DWNX_EXTERN int dwnx_conn_handle_expiry(dwnx_conn *conn, dwnx_tstamp ts);
+
+/**
+ * @function
+ *
  * `dwnx_strerror` returns the text representation of |liberr|.
  * |liberr| must be one of dwnx library error codes (which is defined
  * as :macro:`DWNX_ERR_* <DWNX_ERR_INVALID_ARGUMENT>` macros).

@@ -331,6 +331,7 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   dwnx_transport_params_default(&conn->remote.transport_params);
 
   conn->user_data = user_data;
+  conn->idle_ts = settings->initial_ts;
 
   /* TODO: Specify seed */
   dwnx_map_init(&conn->strms, /* seed = */ 0, mem);
@@ -1257,7 +1258,6 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
   uint8_t *buf;
   size_t len;
   uint64_t vint;
-  (void)ts;
 
   conn_update_timestamp(conn, ts);
 
@@ -2216,6 +2216,10 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
   frame_done:
     dwnx_record_reader_reset(rcrd, mem);
+
+    if (rcrd->state == DWNX_RECORD_READ_STATE_RECORD_SIZE) {
+      conn->idle_ts = ts;
+    }
   }
 
   return 0;
@@ -2597,6 +2601,7 @@ dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
 
 dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
                                 dwnx_vmsg *vmsg, dwnx_tstamp ts) {
+  size_t nwrite;
   int rv = 0;
 
   if (destlen <= 2) {
@@ -2643,7 +2648,14 @@ dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
     return rv;
   }
 
-  return (dwnx_ssize)dwnx_qre_final(&conn->tx.qre);
+  nwrite = dwnx_qre_final(&conn->tx.qre);
+  if (nwrite == 0) {
+    return 0;
+  }
+
+  conn->idle_ts = ts;
+
+  return (dwnx_ssize)nwrite;
 }
 
 int dwnx_conn_write_transport_params(dwnx_conn *conn, dwnx_tstamp ts) {
@@ -3012,6 +3024,39 @@ uint64_t dwnx_conn_get_max_data_left(const dwnx_conn *conn) {
 const dwnx_transport_params *
 dwnx_conn_get_local_transport_params(const dwnx_conn *conn) {
   return &conn->local.transport_params;
+}
+
+dwnx_tstamp dwnx_conn_get_expiry(const dwnx_conn *conn) {
+  return dwnx_conn_get_idle_expiry(conn);
+}
+
+dwnx_tstamp dwnx_conn_get_idle_expiry(const dwnx_conn *conn) {
+  dwnx_duration timeout;
+
+  if (conn->remote.transport_params.max_idle_timeout == 0 ||
+      (conn->local.transport_params.max_idle_timeout &&
+       conn->local.transport_params.max_idle_timeout <
+         conn->remote.transport_params.max_idle_timeout)) {
+    timeout = conn->local.transport_params.max_idle_timeout;
+  } else {
+    timeout = conn->remote.transport_params.max_idle_timeout;
+  }
+
+  if (timeout == 0 || conn->idle_ts > UINT64_MAX - timeout) {
+    return UINT64_MAX;
+  }
+
+  return conn->idle_ts + timeout;
+}
+
+int dwnx_conn_handle_expiry(dwnx_conn *conn, dwnx_tstamp ts) {
+  conn_update_timestamp(conn, ts);
+
+  if (dwnx_conn_get_idle_expiry(conn) <= ts) {
+    return DWNX_ERR_IDLE_CLOSE;
+  }
+
+  return 0;
 }
 
 static void ccerr_init(dwnx_ccerr *ccerr, dwnx_ccerr_type type,

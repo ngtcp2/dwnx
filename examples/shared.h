@@ -75,6 +75,8 @@ enum class Error {
   CLOSE_WAIT,
   // Connection cannot be established.
   CONNECT_FAIL,
+  // Idle timeout
+  IDLE_TIMEOUT,
 };
 
 enum class AppProtocol {
@@ -218,6 +220,9 @@ struct std::formatter<dwnx::Error> : public std::formatter<std::string_view> {
       break;
     case dwnx::Error::CONNECT_FAIL:
       s = "connect fail"sv;
+      break;
+    case dwnx::Error::IDLE_TIMEOUT:
+      s = "idle timeout"sv;
       break;
     }
 
