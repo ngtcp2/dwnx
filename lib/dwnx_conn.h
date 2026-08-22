@@ -179,18 +179,19 @@ uint64_t dwnx_conn_tx_strmq_first_cycle(const dwnx_conn *conn);
 
 /*
  * dwnx_conn_tx_strmq_top returns the dwnx_strm which sits on the top
- * of queue.  tx_strmq must not be empty.
+ * of queue.  |conn|->tx.strmq must not be empty.
  */
 dwnx_strm *dwnx_conn_tx_strmq_top(dwnx_conn *conn);
 
 /*
- * dwnx_conn_tx_strmq_pop pops the dwnx_strm from the queue.  tx_strmq
- * must not be empty.
+ * dwnx_conn_tx_strmq_pop pops the dwnx_strm from the queue.
+ * |conn|->tx.strmq must not be empty.
  */
 void dwnx_conn_tx_strmq_pop(dwnx_conn *conn);
 
 /*
- * dwnx_conn_tx_strmq_push pushes |strm| into tx_strmq.
+ * dwnx_conn_tx_strmq_push pushes |strm| into |conn|->tx.strmq.
+ * Caller should set |strm|->cycle before calling this function.
  *
  *  This function returns 0 if it succeeds, or one of the following
  * negative error codes:
@@ -202,7 +203,8 @@ int dwnx_conn_tx_strmq_push(dwnx_conn *conn, dwnx_strm *strm);
 
 /*
  * dwnx_conn_tx_strmq_push_if_not pushes |strm| into |conn|->tx.strmq
- * if it is not pushed yet.
+ * if it is not pushed yet.  See dwnx_conn_tx_strmq_push for
+ * preconditions.
  *
  *  This function returns 0 if it succeeds, or one of the following
  * negative error codes:
