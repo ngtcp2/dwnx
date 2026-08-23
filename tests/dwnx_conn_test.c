@@ -126,6 +126,8 @@ static const dwnx_transport_params default_remote_params = {
   .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
 };
 
+static void genrand(uint8_t *dest, size_t destlen) { memset(dest, 0, destlen); }
+
 static int recv_stream_data(dwnx_conn *conn, uint32_t flags, int64_t stream_id,
                             uint64_t offset, const uint8_t *data,
                             size_t datalen, void *user_data,
@@ -236,6 +238,12 @@ static void log_write(void *user_data, char *msg, size_t len) {
   assert_ssize((ssize_t)len, ==, nwrite);
 }
 
+static void server_default_callbacks(dwnx_callbacks *callbacks) {
+  *callbacks = (dwnx_callbacks){
+    .rand = genrand,
+  };
+}
+
 static void server_default_settings(dwnx_settings *settings) {
   dwnx_settings_default(settings);
   settings->log_write = log_write;
@@ -253,12 +261,13 @@ static void server_default_transport_params(dwnx_transport_params *params) {
 
 static void setup_default_server_with_options(dwnx_conn **pconn,
                                               conn_options opts) {
-  dwnx_callbacks callbacks = {0};
+  dwnx_callbacks callbacks;
   dwnx_settings settings;
   dwnx_transport_params params;
   int rv;
 
   if (!opts.callbacks) {
+    server_default_callbacks(&callbacks);
     opts.callbacks = &callbacks;
   }
 
@@ -282,6 +291,12 @@ static void setup_default_server(dwnx_conn **pconn) {
   setup_default_server_with_options(pconn, (conn_options){0});
 }
 
+static void client_default_callbacks(dwnx_callbacks *callbacks) {
+  *callbacks = (dwnx_callbacks){
+    .rand = genrand,
+  };
+}
+
 static void client_default_settings(dwnx_settings *settings) {
   dwnx_settings_default(settings);
   settings->log_write = log_write;
@@ -299,12 +314,13 @@ static void client_default_transport_params(dwnx_transport_params *params) {
 
 static void setup_default_client_with_options(dwnx_conn **pconn,
                                               conn_options opts) {
-  dwnx_callbacks callbacks = {0};
+  dwnx_callbacks callbacks;
   dwnx_settings settings;
   dwnx_transport_params params;
   int rv;
 
   if (!opts.callbacks) {
+    client_default_callbacks(&callbacks);
     opts.callbacks = &callbacks;
   }
 
@@ -421,10 +437,7 @@ void test_dwnx_conn_recv_transport_params(void) {
 }
 
 void test_dwnx_conn_recv_stream(void) {
-  static const dwnx_callbacks callbacks = {
-    .stream_open = stream_open,
-    .recv_stream_data = recv_stream_data,
-  };
+  dwnx_callbacks callbacks;
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -433,6 +446,10 @@ void test_dwnx_conn_recv_stream(void) {
   int rv;
   userdata ud;
   conn_options opts;
+
+  server_default_callbacks(&callbacks);
+  callbacks.stream_open = stream_open;
+  callbacks.recv_stream_data = recv_stream_data;
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
@@ -761,10 +778,7 @@ void test_dwnx_conn_recv_stream(void) {
 }
 
 void test_dwnx_conn_recv_reset_stream(void) {
-  static const dwnx_callbacks callbacks = {
-    .stream_open = stream_open,
-    .stream_reset = stream_reset,
-  };
+  dwnx_callbacks callbacks;
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -777,6 +791,10 @@ void test_dwnx_conn_recv_reset_stream(void) {
   int64_t stream_id;
   dwnx_ssize nwrite;
   dwnx_strm *strm;
+
+  server_default_callbacks(&callbacks);
+  callbacks.stream_open = stream_open;
+  callbacks.stream_reset = stream_reset;
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -1040,10 +1058,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
 }
 
 void test_dwnx_conn_recv_stop_sending(void) {
-  static const dwnx_callbacks callbacks = {
-    .stream_open = stream_open,
-    .recv_stop_sending = recv_stop_sending,
-  };
+  dwnx_callbacks callbacks;
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -1055,6 +1070,10 @@ void test_dwnx_conn_recv_stop_sending(void) {
   conn_options opts;
   size_t i;
   dwnx_ssize nwrite;
+
+  server_default_callbacks(&callbacks);
+  callbacks.stream_open = stream_open;
+  callbacks.recv_stop_sending = recv_stop_sending;
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
@@ -1258,10 +1277,7 @@ void test_dwnx_conn_recv_max_data(void) {
 }
 
 void test_dwnx_conn_recv_max_stream_data(void) {
-  static const dwnx_callbacks callbacks = {
-    .stream_open = stream_open,
-    .extend_max_stream_data = extend_max_stream_data,
-  };
+  dwnx_callbacks callbacks;
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -1272,6 +1288,10 @@ void test_dwnx_conn_recv_max_stream_data(void) {
   conn_options opts;
   size_t i;
   int rv;
+
+  server_default_callbacks(&callbacks);
+  callbacks.stream_open = stream_open;
+  callbacks.extend_max_stream_data = extend_max_stream_data;
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
@@ -1357,9 +1377,7 @@ void test_dwnx_conn_recv_max_stream_data(void) {
 }
 
 void test_dwnx_conn_recv_max_streams_bidi(void) {
-  static const dwnx_callbacks callbacks = {
-    .extend_max_local_streams_bidi = extend_max_local_streams_bidi,
-  };
+  dwnx_callbacks callbacks;
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -1369,6 +1387,9 @@ void test_dwnx_conn_recv_max_streams_bidi(void) {
   userdata ud;
   size_t i;
   int rv;
+
+  server_default_callbacks(&callbacks);
+  callbacks.extend_max_local_streams_bidi = extend_max_local_streams_bidi;
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
@@ -1438,9 +1459,7 @@ void test_dwnx_conn_recv_max_streams_bidi(void) {
 }
 
 void test_dwnx_conn_recv_max_streams_uni(void) {
-  static const dwnx_callbacks callbacks = {
-    .extend_max_local_streams_uni = extend_max_local_streams_uni,
-  };
+  dwnx_callbacks callbacks;
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -1450,6 +1469,9 @@ void test_dwnx_conn_recv_max_streams_uni(void) {
   userdata ud;
   size_t i;
   int rv;
+
+  server_default_callbacks(&callbacks);
+  callbacks.extend_max_local_streams_uni = extend_max_local_streams_uni;
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 

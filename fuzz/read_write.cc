@@ -39,6 +39,10 @@ extern "C" {
 #endif // defined(__cplusplus)
 
 namespace {
+void rand(uint8_t *dest, size_t destlen) { memset(dest, 0, destlen); }
+} // namespace
+
+namespace {
 int recv_transport_params(dwnx_conn *conn, const dwnx_transport_params *params,
                           void *user_data) {
   auto fdp = static_cast<FuzzedDataProvider *>(user_data);
@@ -126,6 +130,7 @@ int extend_max_streams(dwnx_conn *conn, uint64_t max_streams, void *user_data) {
 namespace {
 dwnx_conn *setup_conn(FuzzedDataProvider &fdp, const dwnx_mem &mem) {
   static constexpr dwnx_callbacks callbacks{
+    .rand = rand,
     .recv_transport_params = recv_transport_params,
     .recv_stream_data = recv_stream_data,
     .stream_open = stream_open,

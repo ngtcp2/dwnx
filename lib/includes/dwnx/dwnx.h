@@ -911,11 +911,27 @@ typedef int (*dwnx_extend_max_streams)(dwnx_conn *conn, uint64_t max_streams,
                                        void *user_data);
 
 /**
+ * @functypedef
+ *
+ * :type:`dwnx_rand` is a callback function which is invoked when
+ * unpredictable data of |destlen| bytes are needed.  The
+ * implementation must write unpredictable data of |destlen| bytes
+ * into the buffer pointed by |dest|.
+ */
+typedef void (*dwnx_rand)(uint8_t *dest, size_t destlen);
+
+/**
  * @struct
  *
  * :type:`dwnx_callbacks` holds a set of callback functions.
  */
 typedef struct dwnx_callbacks {
+  /**
+   * :member:`rand` is a callback function which is invoked when the
+   * library needs random data.  This callback function must be
+   * specified.
+   */
+  dwnx_rand rand;
   /**
    * :member:`recv_transport_params` is a callback function which is
    * invoked when transport parameters are received from the remote
