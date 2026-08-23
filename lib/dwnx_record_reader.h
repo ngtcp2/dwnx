@@ -79,6 +79,7 @@ typedef enum dwnx_record_read_state {
   DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASONLEN,
   DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_REASON,
   DWNX_RECORD_READ_STATE_DRAINING,
+  DWNX_RECORD_READ_STATE_CLOSING,
 } dwnx_record_read_state;
 
 typedef struct dwnx_record_reader {

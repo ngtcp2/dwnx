@@ -305,6 +305,20 @@ dwnx_ssize
 dwnx_frame_encode_stream_data_blocked(uint8_t *out, size_t outlen,
                                       const dwnx_frame_stream_data_blocked *fr);
 
+/*
+ * dwnx_frame_encode_connection_close encodes CONNECTION_CLOSE frame
+ * |fr| into the buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize
+dwnx_frame_encode_connection_close(uint8_t *out, size_t outlen,
+                                   const dwnx_frame_connection_close *fr);
+
 typedef struct dwnx_frd {
   union {
     dwnx_vec data;
