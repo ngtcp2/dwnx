@@ -1374,6 +1374,8 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  * :macro:`DWNX_ERR_WRITE_MORE`
  *     Application can call this function to pack more stream data
  *     into the same record.  See above to know how it works.
+ * :macro:`DWNX_ERR_NOBUF`
+ *     Buffer is too small.
  *
  * If any other negative error is returned, close the connection.
  */
