@@ -2708,6 +2708,18 @@ void test_dwnx_conn_writev_stream(void) {
 
   dwnx_conn_del(conn);
 
+  /* Buffer is too small */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_stream(
+    conn, buf.last, 2, NULL, DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, nwrite);
+
+  dwnx_conn_del(conn);
+
   /* Write STREAM frame */
   setup_default_client(&conn);
   dwnx_read_transport_params(conn, &remote_params, ++ts);
