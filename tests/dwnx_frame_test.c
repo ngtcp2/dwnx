@@ -41,6 +41,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_frame_encode_max_streams),
   munit_void_test(test_dwnx_frame_encode_data_blocked),
   munit_void_test(test_dwnx_frame_encode_stream_data_blocked),
+  munit_void_test(test_dwnx_frame_encode_connection_close),
   munit_void_test(test_dwnx_frame_encode_qx_ping),
   munit_test_end(),
 };
@@ -421,6 +422,91 @@ void test_dwnx_frame_encode_stream_data_blocked(void) {
   assert_uint64(fr.offset, ==, nfr.offset);
 
   rv = dwnx_frame_encode_stream_data_blocked(buf, framelen - 1, &fr);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
+}
+
+void test_dwnx_frame_encode_connection_close(void) {
+  static const uint8_t reason[] = "hello world";
+  uint8_t buf[256];
+  dwnx_frame_connection_close fr, nfr;
+  dwnx_ssize rv, nread;
+  size_t framelen = 1 + 1 + 1 + 1 + dwnx_strlen_lit(reason);
+
+  fr = (dwnx_frame_connection_close){
+    .type = DWNX_FRAME_CONNECTION_CLOSE,
+    .error_code = DWNX_PROTOCOL_VIOLATION,
+    .frame_type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .reasonlen = dwnx_strlen_lit(reason),
+    .reason = reason,
+  };
+
+  rv = dwnx_frame_encode_connection_close(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_connection_close(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_uint64(fr.error_code, ==, nfr.error_code);
+  assert_uint64(fr.frame_type, ==, nfr.frame_type);
+  assert_size(fr.reasonlen, ==, nfr.reasonlen);
+  assert_memory_equal(fr.reasonlen, fr.reason, nfr.reason);
+
+  rv = dwnx_frame_encode_connection_close(buf, framelen - 1, &fr);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
+
+  /* Without reason */
+  framelen = 1 + 1 + 1 + 1;
+
+  fr = (dwnx_frame_connection_close){
+    .type = DWNX_FRAME_CONNECTION_CLOSE,
+    .error_code = DWNX_PROTOCOL_VIOLATION,
+    .frame_type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+  };
+
+  rv = dwnx_frame_encode_connection_close(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_connection_close(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_uint64(fr.error_code, ==, nfr.error_code);
+  assert_uint64(fr.frame_type, ==, nfr.frame_type);
+  assert_size(fr.reasonlen, ==, nfr.reasonlen);
+  assert_null(nfr.reason);
+
+  rv = dwnx_frame_encode_connection_close(buf, framelen - 1, &fr);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
+
+  /* CONNECTION_CLOSE (0x1D) */
+  framelen = 1 + 1 + 1 + dwnx_strlen_lit(reason);
+
+  fr = (dwnx_frame_connection_close){
+    .type = DWNX_FRAME_CONNECTION_CLOSE_APP,
+    .error_code = DWNX_PROTOCOL_VIOLATION,
+    .reasonlen = dwnx_strlen_lit(reason),
+    .reason = reason,
+  };
+
+  rv = dwnx_frame_encode_connection_close(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_connection_close(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_uint64(fr.error_code, ==, nfr.error_code);
+  assert_size(fr.reasonlen, ==, nfr.reasonlen);
+  assert_memory_equal(fr.reasonlen, fr.reason, nfr.reason);
+
+  rv = dwnx_frame_encode_connection_close(buf, framelen - 1, &fr);
 
   assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
 }

@@ -1262,7 +1262,14 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
   conn_update_timestamp(conn, ts);
 
   if (datalen == 0) {
-    return 0;
+    switch (rcrd->state) {
+    case DWNX_RECORD_READ_STATE_DRAINING:
+      return DWNX_ERR_DRAINING;
+    case DWNX_RECORD_READ_STATE_CLOSING:
+      return DWNX_ERR_CLOSING;
+    default:
+      return 0;
+    }
   }
 
   p = data;
@@ -2208,6 +2215,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       return DWNX_ERR_DRAINING;
     case DWNX_RECORD_READ_STATE_DRAINING:
       return DWNX_ERR_DRAINING;
+    case DWNX_RECORD_READ_STATE_CLOSING:
+      return DWNX_ERR_CLOSING;
     default:
       dwnx_unreachable();
     }
@@ -3057,6 +3066,67 @@ int dwnx_conn_handle_expiry(dwnx_conn *conn, dwnx_tstamp ts) {
   }
 
   return 0;
+}
+
+dwnx_ssize dwnx_conn_write_connection_close(dwnx_conn *conn, uint8_t *dest,
+                                            size_t destlen,
+                                            const dwnx_ccerr *ccerr,
+                                            dwnx_tstamp ts) {
+  dwnx_frame fr;
+  dwnx_qre qre;
+  size_t nwrite;
+  int rv;
+
+  conn_update_timestamp(conn, ts);
+
+  if (conn->rx.rcrd.state == DWNX_RECORD_READ_STATE_DRAINING ||
+      conn->rx.rcrd.state == DWNX_RECORD_READ_STATE_CLOSING) {
+    return 0;
+  }
+
+  if (destlen <= 2) {
+    return DWNX_ERR_NOBUF;
+  }
+
+  switch (ccerr->type) {
+  case DWNX_CCERR_TYPE_TRANSPORT:
+    fr.connection_close = (dwnx_frame_connection_close){
+      .type = DWNX_FRAME_CONNECTION_CLOSE,
+      .error_code = ccerr->error_code,
+      .frame_type = ccerr->frame_type,
+      .reasonlen = ccerr->reasonlen,
+      .reason = ccerr->reason,
+    };
+
+    break;
+  case DWNX_CCERR_TYPE_APPLICATION:
+    fr.connection_close = (dwnx_frame_connection_close){
+      .type = DWNX_FRAME_CONNECTION_CLOSE_APP,
+      .error_code = ccerr->error_code,
+      .reasonlen = ccerr->reasonlen,
+      .reason = ccerr->reason,
+    };
+
+    break;
+  default:
+    return 0;
+  }
+
+  dwnx_qre_init(&qre, &conn->log);
+  dwnx_qre_start(&qre, dest, destlen);
+
+  rv = dwnx_qre_encode_frame(&qre, &fr);
+  if (rv != 0) {
+    return rv;
+  }
+
+  nwrite = dwnx_qre_final(&qre);
+
+  assert(nwrite);
+
+  conn->rx.rcrd.state = DWNX_RECORD_READ_STATE_CLOSING;
+
+  return (dwnx_ssize)nwrite;
 }
 
 static void ccerr_init(dwnx_ccerr *ccerr, dwnx_ccerr_type type,

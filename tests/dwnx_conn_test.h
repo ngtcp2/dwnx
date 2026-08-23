@@ -55,5 +55,6 @@ munit_void_test_decl(test_dwnx_conn_extend_max_stream_offset)
 munit_void_test_decl(test_dwnx_conn_writev_stream)
 munit_void_test_decl(test_dwnx_conn_send_stream_data_blocked)
 munit_void_test_decl(test_dwnx_conn_handle_expiry)
+munit_void_test_decl(test_dwnx_conn_write_connection_close)
 
 #endif /* !defined(DWNX_CONN_TEST_H) */

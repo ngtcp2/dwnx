@@ -1625,6 +1625,39 @@ DWNX_EXTERN void dwnx_ccerr_set_application_error(dwnx_ccerr *ccerr,
 /**
  * @function
  *
+ * `dwnx_conn_write_connection_close` writes a QMux record which only
+ * contains a single CONNECTION_CLOSE frame (either type 0x1C or 0x1D)
+ * in the buffer pointed by |dest| whose capacity is |destlen|.
+ *
+ * If :member:`ccerr->type <dwnx_ccerr.type>` ==
+ * :enum:`dwnx_ccerr_type.DWNX_CCERR_TYPE_TRANSPORT`, this function
+ * sends CONNECTION_CLOSE (type 0x1C) frame.  If :member:`ccerr->type
+ * <dwnx_ccerr.type>` ==
+ * :enum:`dwnx_ccerr_type.DWNX_CCERR_TYPE_APPLICATION`, it sends
+ * CONNECTION_CLOSE (type 0x1D) frame.  Otherwise, it does not produce
+ * any data, and returns 0.
+ *
+ * After successful production of QMux record, |conn| enters closing
+ * state.
+ *
+ * If |conn| is in either draining or closing state, this function
+ * returns 0 without writing any data.
+ *
+ * This function returns the number of bytes written in |dest| if it
+ * succeeds, or one of the following negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOBUF`
+ *     Buffer is too small.
+ */
+DWNX_EXTERN dwnx_ssize dwnx_conn_write_connection_close(dwnx_conn *conn,
+                                                        uint8_t *dest,
+                                                        size_t destlen,
+                                                        const dwnx_ccerr *ccerr,
+                                                        dwnx_tstamp ts);
+
+/**
+ * @function
+ *
  * `dwnx_is_bidi_stream` returns nonzero if |stream_id| denotes
  * bidirectional stream.
  */

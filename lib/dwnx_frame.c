@@ -60,6 +60,10 @@ dwnx_ssize dwnx_frame_encode(uint8_t *out, size_t outlen,
   case DWNX_FRAME_STREAM_DATA_BLOCKED:
     return dwnx_frame_encode_stream_data_blocked(out, outlen,
                                                  &fr->stream_data_blocked);
+  case DWNX_FRAME_CONNECTION_CLOSE:
+  case DWNX_FRAME_CONNECTION_CLOSE_APP:
+    return dwnx_frame_encode_connection_close(out, outlen,
+                                              &fr->connection_close);
   default:
     dwnx_unreachable();
   }
@@ -306,6 +310,41 @@ dwnx_ssize dwnx_frame_encode_stream_data_blocked(
   *p++ = DWNX_FRAME_STREAM_DATA_BLOCKED;
   p = dwnx_put_uvarint(p, (uint64_t)fr->stream_id);
   p = dwnx_put_uvarint(p, fr->offset);
+
+  assert((size_t)(p - out) == len);
+
+  return (dwnx_ssize)len;
+}
+
+dwnx_ssize
+dwnx_frame_encode_connection_close(uint8_t *out, size_t outlen,
+                                   const dwnx_frame_connection_close *fr) {
+  size_t len = 1 + dwnx_put_uvarintlen(fr->error_code) +
+               dwnx_put_uvarintlen(fr->reasonlen) + fr->reasonlen;
+  uint8_t *p;
+
+  if (fr->type == DWNX_FRAME_CONNECTION_CLOSE) {
+    len += dwnx_put_uvarintlen(fr->frame_type);
+  }
+
+  if (outlen < len) {
+    return DWNX_ERR_NOBUF;
+  }
+
+  p = out;
+
+  *p++ = (uint8_t)fr->type;
+  p = dwnx_put_uvarint(p, fr->error_code);
+
+  if (fr->type == DWNX_FRAME_CONNECTION_CLOSE) {
+    p = dwnx_put_uvarint(p, fr->frame_type);
+  }
+
+  p = dwnx_put_uvarint(p, fr->reasonlen);
+
+  if (fr->reasonlen) {
+    p = dwnx_cpymem(p, fr->reason, fr->reasonlen);
+  }
 
   assert((size_t)(p - out) == len);
 

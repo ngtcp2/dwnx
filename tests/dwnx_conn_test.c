@@ -55,6 +55,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_writev_stream),
   munit_void_test(test_dwnx_conn_send_stream_data_blocked),
   munit_void_test(test_dwnx_conn_handle_expiry),
+  munit_void_test(test_dwnx_conn_write_connection_close),
   munit_test_end(),
 };
 
@@ -3354,6 +3355,146 @@ void test_dwnx_conn_handle_expiry(void) {
   rv = dwnx_conn_handle_expiry(conn, ts);
 
   assert_int(DWNX_ERR_IDLE_CLOSE, ==, rv);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_write_connection_close(void) {
+  static const uint8_t reason[] = "this is reason phrase";
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_tstamp ts = 0;
+  dwnx_ccerr ccerr;
+  dwnx_ssize nwrite, nread;
+  dwnx_frd frd;
+  dwnx_frame fr;
+  uint64_t rclen;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+  dwnx_frd_init(&frd);
+
+  /* transport */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ts);
+
+  ccerr = (dwnx_ccerr){
+    .type = DWNX_CCERR_TYPE_TRANSPORT,
+    .error_code = DWNX_INTERNAL_ERROR,
+    .frame_type = DWNX_FRAME_QX_PING_REQUEST,
+    .reasonlen = dwnx_strlen_lit(reason),
+    .reason = reason,
+  };
+
+  nwrite = dwnx_conn_write_connection_close(conn, buf.pos, dwnx_buf_left(&buf),
+                                            &ccerr, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_CLOSING, ==,
+              conn->rx.rcrd.state);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_CONNECTION_CLOSE, ==, fr.hd.type);
+  assert_uint64(ccerr.error_code, ==, fr.connection_close.error_code);
+  assert_uint64(ccerr.frame_type, ==, fr.connection_close.frame_type);
+  assert_size(ccerr.reasonlen, ==, fr.connection_close.reasonlen);
+  assert_memory_equal(ccerr.reasonlen, ccerr.reason,
+                      fr.connection_close.reason);
+
+  /* Calling dwnx_conn_write_connection_close again returns 0. */
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_connection_close(conn, buf.pos, dwnx_buf_left(&buf),
+                                            &ccerr, ++ts);
+
+  assert_ptrdiff(0, ==, nwrite);
+
+  dwnx_conn_del(conn);
+
+  /* transport without reason */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ts);
+
+  ccerr = (dwnx_ccerr){
+    .type = DWNX_CCERR_TYPE_TRANSPORT,
+    .error_code = DWNX_INTERNAL_ERROR,
+    .frame_type = DWNX_FRAME_QX_PING_REQUEST,
+  };
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_connection_close(conn, buf.pos, dwnx_buf_left(&buf),
+                                            &ccerr, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_CLOSING, ==,
+              conn->rx.rcrd.state);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_CONNECTION_CLOSE, ==, fr.hd.type);
+  assert_uint64(ccerr.error_code, ==, fr.connection_close.error_code);
+  assert_uint64(ccerr.frame_type, ==, fr.connection_close.frame_type);
+  assert_size(ccerr.reasonlen, ==, fr.connection_close.reasonlen);
+  assert_null(fr.connection_close.reason);
+
+  dwnx_conn_del(conn);
+
+  /* application */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ts);
+
+  ccerr = (dwnx_ccerr){
+    .type = DWNX_CCERR_TYPE_APPLICATION,
+    .error_code = DWNX_INTERNAL_ERROR,
+    .reasonlen = dwnx_strlen_lit(reason),
+    .reason = reason,
+  };
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_connection_close(conn, buf.pos, dwnx_buf_left(&buf),
+                                            &ccerr, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_CLOSING, ==,
+              conn->rx.rcrd.state);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_CONNECTION_CLOSE_APP, ==, fr.hd.type);
+  assert_uint64(ccerr.error_code, ==, fr.connection_close.error_code);
+  assert_size(ccerr.reasonlen, ==, fr.connection_close.reasonlen);
+  assert_memory_equal(ccerr.reasonlen, ccerr.reason,
+                      fr.connection_close.reason);
+
+  dwnx_conn_del(conn);
+
+  /* idle close */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ts);
+
+  ccerr = (dwnx_ccerr){
+    .type = DWNX_CCERR_TYPE_IDLE_CLOSE,
+  };
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_connection_close(conn, buf.pos, dwnx_buf_left(&buf),
+                                            &ccerr, ++ts);
+
+  assert_ptrdiff(0, ==, nwrite);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
 
   dwnx_conn_del(conn);
 }
