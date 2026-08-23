@@ -171,6 +171,15 @@ void Client::disconnect() {
 }
 
 namespace {
+void rand_bytes(uint8_t *dest, size_t destlen) {
+  if (!util::generate_secure_random({dest, destlen})) {
+    assert(0);
+    abort();
+  }
+}
+} // namespace
+
+namespace {
 int recv_transport_params(dwnx_conn *conn, const dwnx_transport_params *params,
                           void *user_data) {
   auto c = static_cast<Client *>(user_data);
@@ -339,6 +348,7 @@ std::expected<void, Error> Client::init(int fd, const char *addr,
   ev_io_set(&wev_, fd, EV_WRITE);
 
   static constexpr auto callbacks = dwnx_callbacks{
+    .rand = ::rand_bytes,
     .recv_transport_params = ::recv_transport_params,
     .recv_stream_data = ::recv_stream_data,
     .stream_close = stream_close,

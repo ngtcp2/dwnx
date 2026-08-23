@@ -356,6 +356,15 @@ std::expected<void, Error> Handler::handshake_completed() {
 }
 
 namespace {
+void rand_bytes(uint8_t *dest, size_t destlen) {
+  if (!util::generate_secure_random({dest, destlen})) {
+    assert(0);
+    abort();
+  }
+}
+} // namespace
+
+namespace {
 int recv_transport_params(dwnx_conn *conn, const dwnx_transport_params *params,
                           void *user_data) {
   auto h = static_cast<Handler *>(user_data);
@@ -505,6 +514,7 @@ void Handler::write_qlog(const void *data, size_t datalen) {
 
 std::expected<void, Error> Handler::init(SSL_CTX *ssl_ctx) {
   static constexpr auto callbacks = dwnx_callbacks{
+    .rand = ::rand_bytes,
     .recv_transport_params = ::recv_transport_params,
     .recv_stream_data = ::recv_stream_data,
     .stream_open = ::stream_open,

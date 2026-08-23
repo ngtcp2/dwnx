@@ -293,8 +293,10 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   void *ptr;
   dwnx_conn *conn;
   char *logbuf;
+  uint64_t seed;
 
   assert(callbacks);
+  assert(callbacks->rand);
   assert(settings);
   assert(params);
   assert(params->initial_max_stream_data_bidi_local <= DWNX_MAX_VARINT);
@@ -333,8 +335,8 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   conn->user_data = user_data;
   conn->idle_ts = settings->initial_ts;
 
-  /* TODO: Specify seed */
-  dwnx_map_init(&conn->strms, /* seed = */ 0, mem);
+  callbacks->rand((uint8_t *)&seed, sizeof(seed));
+  dwnx_map_init(&conn->strms, seed, mem);
   dwnx_idtr_init(&conn->bidi.idtr, mem);
   dwnx_idtr_init(&conn->uni.idtr, mem);
   dwnx_pq_init(&conn->tx.strmq, cycle_less, mem);
