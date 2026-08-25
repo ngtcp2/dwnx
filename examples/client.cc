@@ -331,6 +331,24 @@ std::expected<void, Error> Client::extend_max_stream_data(int64_t stream_id,
   return proto_codec_->extend_max_stream_data(stream_id, max_data);
 }
 
+namespace {
+int write_stream_data_offset(dwnx_conn *conn, int64_t stream_id,
+                             uint64_t offset, size_t len, void *user_data) {
+  auto c = static_cast<Client *>(user_data);
+  if (!c->write_stream_data_offset(stream_id, offset, len)) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+} // namespace
+
+std::expected<void, Error> Client::write_stream_data_offset(int64_t stream_id,
+                                                            uint64_t offset,
+                                                            size_t len) {
+  return proto_codec_->write_stream_data_offset(stream_id, len);
+}
+
 void Client::early_data_rejected() {
   proto_codec_->early_data_rejected();
 
@@ -356,6 +374,7 @@ std::expected<void, Error> Client::init(int fd, const char *addr,
     .stream_stop_sending = stream_stop_sending,
     .extend_max_stream_data = ::extend_max_stream_data,
     .extend_max_local_streams_bidi = extend_max_local_streams_bidi,
+    .write_stream_data_offset = ::write_stream_data_offset,
   };
 
   dwnx_settings settings;

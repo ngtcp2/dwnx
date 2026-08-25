@@ -169,6 +169,8 @@ public:
   std::expected<void, Error> on_stream_stop_sending(int64_t stream_id);
   std::expected<void, Error> extend_max_stream_data(int64_t stream_id,
                                                     uint64_t max_data);
+  std::expected<void, Error>
+  write_stream_data_offset(int64_t stream_id, uint64_t offset, size_t len);
   void shutdown_read(int64_t stream_id, uint64_t app_error_code);
 
   void write_qlog(const void *data, size_t datalen);

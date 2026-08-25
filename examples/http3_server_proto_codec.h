@@ -61,6 +61,9 @@ public:
   std::expected<void, Error> extend_max_stream_data(int64_t stream_id,
                                                     uint64_t max_data);
 
+  std::expected<void, Error> write_stream_data_offset(int64_t stream_id,
+                                                      size_t len);
+
   std::expected<void, Error> setup_codec();
 
   std::expected<std::span<const uint8_t>, Error>
