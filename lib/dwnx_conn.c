@@ -2935,9 +2935,7 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
   if (ndatalen == 0 && datalen) {
     if ((rv = dwnx_conn_write_data_blocked(conn, ts)) != 0 ||
         (rv = dwnx_conn_write_stream_data_blocked(conn, strm, ts)) != 0) {
-      if (rv != DWNX_ERR_NOBUF) {
-        return rv;
-      }
+      assert(DWNX_ERR_NOBUF == rv);
 
       strm->flags |= DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED;
 
@@ -2982,7 +2980,7 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
 
   rv = dwnx_qre_encode_frame(qre, &fr);
   if (rv != 0) {
-    return rv;
+    dwnx_unreachable();
   }
 
   strm->tx.offset += (uint64_t)wdatalen;
@@ -2999,9 +2997,7 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
              ((rv = dwnx_conn_write_data_blocked(conn, ts)) != 0 ||
               (rv = dwnx_conn_write_stream_data_blocked(conn, strm, ts)) !=
                 0)) {
-    if (rv != DWNX_ERR_NOBUF) {
-      return rv;
-    }
+    assert(DWNX_ERR_NOBUF == rv);
 
     strm->flags |= DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED;
 
