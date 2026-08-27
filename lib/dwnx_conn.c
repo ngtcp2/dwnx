@@ -2637,6 +2637,9 @@ dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
     return DWNX_ERR_NOBUF;
   }
 
+  destlen =
+    dwnx_min(destlen, DWNX_QRE_RECORDLEN_SIZE + DWNX_DEFAULT_MAX_RECORD_SIZE);
+
   if (!dwnx_qre_has_started(&conn->tx.qre)) {
     dwnx_qre_start(&conn->tx.qre, dest, destlen);
 
