@@ -146,4 +146,3 @@ When the timer has fired, call `dwnx_conn_handle_expiry`.  If it
 returns :macro:`DWNX_ERR_IDLE_CLOSE`, the connection has been
 quiescent too long.  The underlying transport should be closed without
 sending ``CONNECTION_CLOSE`` frame.
-
