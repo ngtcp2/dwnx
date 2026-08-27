@@ -5,6 +5,7 @@ Welcome to dwnx's documentation!
    :maxdepth: 1
    :caption: Contents:
 
+   programmers-guide
    apiref
 
 Indices and tables
