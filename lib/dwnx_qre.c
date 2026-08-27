@@ -23,6 +23,9 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 #include "dwnx_qre.h"
+
+#include <assert.h>
+
 #include "dwnx_conv.h"
 #include "dwnx_macro.h"
 #include "dwnx_log.h"
@@ -34,6 +37,8 @@ void dwnx_qre_init(dwnx_qre *qre, dwnx_log *log) {
 }
 
 void dwnx_qre_start(dwnx_qre *qre, uint8_t *buf, size_t buflen) {
+  assert(buflen >= DWNX_QRE_RECORDLEN_SIZE);
+
   qre->flags |= DWNX_QRE_FLAG_STARTED;
   dwnx_buf_init(&qre->buf, buf, buflen);
   /* Leave the space for the record length */
