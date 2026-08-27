@@ -921,6 +921,22 @@ typedef int (*dwnx_extend_max_streams)(dwnx_conn *conn, uint64_t max_streams,
 typedef void (*dwnx_rand)(uint8_t *dest, size_t destlen);
 
 /**
+ * @functypedef
+ *
+ * :type:`dwnx_write_stream_data_offset` is a callback function which
+ * is invoked when the stream data is written to a QMux record.
+ * |stream_id| identifies the stream.  |offset| is the starting offset
+ * of the stream data.  |len| is the length of the stream data.
+ *
+ * The callback function must return 0 if it succeeds.  Returning
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library call return
+ * immediately.
+ */
+typedef int (*dwnx_write_stream_data_offset)(dwnx_conn *conn, int64_t stream_id,
+                                             uint64_t offset, size_t len,
+                                             void *user_data);
+
+/**
  * @struct
  *
  * :type:`dwnx_callbacks` holds a set of callback functions.
@@ -1009,6 +1025,12 @@ typedef struct dwnx_callbacks {
    * is optional.
    */
   dwnx_extend_max_streams extend_max_remote_streams_uni;
+  /**
+   * :member:`write_stream_data_offset` is a callback function which
+   * is invoked when the stream data is written.  This callback
+   * function is optional.
+   */
+  dwnx_write_stream_data_offset write_stream_data_offset;
 } dwnx_callbacks;
 
 /**
@@ -1345,6 +1367,13 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  * data, including the empty data, is submitted to a stream or
  * :macro:`DWNX_WRITE_STREAM_FLAG_FIN` is set in |flags|.  If 0 length
  * STREAM frame is successfully serialized, |*pdatalen| would be 0.
+ *
+ * This function may close the stream identified by |stream_id|.
+ * Although |*pdatalen| stores the number of bytes written to the
+ * stream, after this function returns, the stream has already been
+ * closed.  To make sure that the number of bytes is notified to the
+ * application before closing the stream, use
+ * :member:`dwnx_callbacks.write_stream_data_offset` callback.
  *
  * This function may return :macro:`DWNX_ERR_WRITE_MORE` error code.
  * It indicates that there are more spaces in the record, the caller

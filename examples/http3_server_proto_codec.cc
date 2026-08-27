@@ -105,6 +105,31 @@ ProtoCodec::extend_max_stream_data(int64_t stream_id, uint64_t max_data) {
   return {};
 }
 
+std::expected<void, Error>
+ProtoCodec::write_stream_data_offset(int64_t stream_id, size_t len) {
+  if (auto rv = nghttp3_conn_add_write_offset(httpconn_, stream_id, len);
+      rv != 0) {
+    std::println(stderr, "nghttp3_conn_add_write_offset: {}",
+                 nghttp3_strerror(rv));
+    dwnx_ccerr_set_application_error(
+      &last_error_, nghttp3_err_infer_quic_app_error_code(rv), nullptr, 0);
+
+    return std::unexpected{Error::HTTP3};
+  }
+
+  if (auto rv = nghttp3_conn_add_ack_offset(httpconn_, stream_id, len);
+      rv != 0) {
+    std::println(stderr, "nghttp3_conn_add_ack_offset: {}",
+                 nghttp3_strerror(rv));
+    dwnx_ccerr_set_application_error(
+      &last_error_, nghttp3_err_infer_quic_app_error_code(rv), nullptr, 0);
+
+    return std::unexpected{Error::HTTP3};
+  }
+
+  return {};
+}
+
 std::expected<std::span<const uint8_t>, Error>
 ProtoCodec::write_record(std::span<uint8_t> dest, dwnx_tstamp ts) {
   std::array<nghttp3_vec, 16> vec;
@@ -153,30 +178,6 @@ ProtoCodec::write_record(std::span<uint8_t> dest, dwnx_tstamp ts) {
         continue;
       case DWNX_ERR_WRITE_MORE:
         assert(ndatalen >= 0);
-        if (auto rv = nghttp3_conn_add_write_offset(httpconn_, stream_id,
-                                                    as_unsigned(ndatalen));
-            rv != 0) {
-          std::println(stderr, "nghttp3_conn_add_write_offset: {}",
-                       nghttp3_strerror(rv));
-          dwnx_ccerr_set_application_error(
-            &last_error_, nghttp3_err_infer_quic_app_error_code(rv), nullptr,
-            0);
-
-          return std::unexpected{Error::HTTP3};
-        }
-
-        if (auto rv = nghttp3_conn_add_ack_offset(httpconn_, stream_id,
-                                                  as_unsigned(ndatalen));
-            rv != 0) {
-          std::println(stderr, "nghttp3_conn_add_ack_offset: {}",
-                       nghttp3_strerror(rv));
-          dwnx_ccerr_set_application_error(
-            &last_error_, nghttp3_err_infer_quic_app_error_code(rv), nullptr,
-            0);
-
-          return std::unexpected{Error::HTTP3};
-        }
-
         continue;
       }
 
@@ -187,30 +188,6 @@ ProtoCodec::write_record(std::span<uint8_t> dest, dwnx_tstamp ts) {
       dwnx_ccerr_set_liberr(&last_error_, static_cast<int>(nwrite), nullptr, 0);
 
       return std::unexpected{Error::HTTP3};
-    }
-
-    if (ndatalen >= 0) {
-      if (auto rv = nghttp3_conn_add_write_offset(httpconn_, stream_id,
-                                                  as_unsigned(ndatalen));
-          rv != 0) {
-        std::println(stderr, "nghttp3_conn_add_write_offset: {}",
-                     nghttp3_strerror(rv));
-        dwnx_ccerr_set_application_error(
-          &last_error_, nghttp3_err_infer_quic_app_error_code(rv), nullptr, 0);
-
-        return std::unexpected{Error::HTTP3};
-      }
-
-      if (auto rv = nghttp3_conn_add_ack_offset(httpconn_, stream_id,
-                                                as_unsigned(ndatalen));
-          rv != 0) {
-        std::println(stderr, "nghttp3_conn_add_ack_offset: {}",
-                     nghttp3_strerror(rv));
-        dwnx_ccerr_set_application_error(
-          &last_error_, nghttp3_err_infer_quic_app_error_code(rv), nullptr, 0);
-
-        return std::unexpected{Error::HTTP3};
-      }
     }
 
     return dest.first(as_unsigned(nwrite));

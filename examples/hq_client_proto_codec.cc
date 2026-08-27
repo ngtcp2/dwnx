@@ -106,6 +106,19 @@ ProtoCodec::extend_max_stream_data(int64_t stream_id, uint64_t max_data) {
   return {};
 }
 
+std::expected<void, Error>
+ProtoCodec::write_stream_data_offset(int64_t stream_id, size_t len) {
+  auto stream = client_->find_stream(stream_id);
+  if (stream) {
+    stream->reqbuf = stream->reqbuf.subspan(len);
+    if (stream->reqbuf.empty()) {
+      sendq_.erase(std::ranges::begin(sendq_));
+    }
+  }
+
+  return {};
+}
+
 std::expected<std::span<const uint8_t>, Error>
 ProtoCodec::write_record(std::span<uint8_t> dest, dwnx_tstamp ts) {
   dwnx_vec vec;
@@ -143,14 +156,6 @@ ProtoCodec::write_record(std::span<uint8_t> dest, dwnx_tstamp ts) {
         continue;
       case DWNX_ERR_WRITE_MORE:
         assert(ndatalen >= 0);
-
-        if (auto stream = client_->find_stream(stream_id); stream) {
-          stream->reqbuf = stream->reqbuf.subspan(as_unsigned(ndatalen));
-          if (stream->reqbuf.empty()) {
-            sendq_.erase(std::ranges::begin(sendq_));
-          }
-        }
-
         continue;
       }
 
@@ -161,16 +166,6 @@ ProtoCodec::write_record(std::span<uint8_t> dest, dwnx_tstamp ts) {
       dwnx_ccerr_set_liberr(&last_error_, static_cast<int>(nwrite), nullptr, 0);
 
       return std::unexpected{Error::QUIC};
-    }
-
-    if (ndatalen >= 0) {
-      auto stream = client_->find_stream(stream_id);
-      if (stream) {
-        stream->reqbuf = stream->reqbuf.subspan(as_unsigned(ndatalen));
-        if (stream->reqbuf.empty()) {
-          sendq_.erase(std::ranges::begin(sendq_));
-        }
-      }
     }
 
     return dest.first(as_unsigned(nwrite));

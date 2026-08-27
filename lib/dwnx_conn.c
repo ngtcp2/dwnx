@@ -275,6 +275,24 @@ static int conn_call_extend_max_remote_streams_uni(dwnx_conn *conn,
   return 0;
 }
 
+static int conn_call_write_stream_data_offset(dwnx_conn *conn,
+                                              const dwnx_strm *strm,
+                                              size_t len) {
+  int rv;
+
+  if (!conn->callbacks.write_stream_data_offset) {
+    return 0;
+  }
+
+  rv = conn->callbacks.write_stream_data_offset(
+    conn, strm->stream_id, strm->tx.offset, len, conn->user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
 static int cycle_less(const dwnx_pq_entry *lhs, const dwnx_pq_entry *rhs) {
   dwnx_strm *ls = dwnx_struct_of(lhs, dwnx_strm, pe);
   dwnx_strm *rs = dwnx_struct_of(rhs, dwnx_strm, pe);
@@ -2981,6 +2999,11 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
   rv = dwnx_qre_encode_frame(qre, &fr);
   if (rv != 0) {
     dwnx_unreachable();
+  }
+
+  rv = conn_call_write_stream_data_offset(conn, strm, (size_t)wdatalen);
+  if (rv != 0) {
+    return rv;
   }
 
   strm->tx.offset += (uint64_t)wdatalen;

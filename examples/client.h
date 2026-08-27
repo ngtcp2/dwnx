@@ -124,6 +124,8 @@ public:
   std::expected<void, Error> on_stream_stop_sending(int64_t stream_id);
   std::expected<void, Error> extend_max_stream_data(int64_t stream_id,
                                                     uint64_t max_data);
+  std::expected<void, Error>
+  write_stream_data_offset(int64_t stream_id, uint64_t offset, size_t len);
 
   void on_send_blocked(std::span<const uint8_t> data);
   void start_rev();
