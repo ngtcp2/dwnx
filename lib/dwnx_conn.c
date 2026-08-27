@@ -2633,7 +2633,7 @@ dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
   size_t nwrite;
   int rv = 0;
 
-  if (destlen <= 2) {
+  if (destlen <= DWNX_QRE_RECORDLEN_SIZE) {
     return DWNX_ERR_NOBUF;
   }
 
@@ -3108,7 +3108,7 @@ dwnx_ssize dwnx_conn_write_connection_close(dwnx_conn *conn, uint8_t *dest,
     return 0;
   }
 
-  if (destlen <= 2) {
+  if (destlen <= DWNX_QRE_RECORDLEN_SIZE) {
     return DWNX_ERR_NOBUF;
   }
 
