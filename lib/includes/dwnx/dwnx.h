@@ -1705,6 +1705,97 @@ DWNX_EXTERN dwnx_ssize dwnx_conn_write_connection_close(dwnx_conn *conn,
 /**
  * @function
  *
+ * `dwnx_conn_encode_0rtt_transport_params` encodes the QUIC transport
+ * parameters that are used for 0-RTT data in the buffer pointed by
+ * |dest| of length |destlen|.  It includes at least the following
+ * fields:
+ *
+ * - :member:`dwnx_transport_params.initial_max_streams_bidi`
+ * - :member:`dwnx_transport_params.initial_max_streams_uni`
+ * - :member:`dwnx_transport_params.initial_max_stream_data_bidi_local`
+ * - :member:`dwnx_transport_params.initial_max_stream_data_bidi_remote`
+ * - :member:`dwnx_transport_params.initial_max_stream_data_uni`
+ * - :member:`dwnx_transport_params.initial_max_data`
+ *
+ * If |conn| is initialized as server, the following additional fields
+ * are also included:
+ *
+ * - :member:`dwnx_transport_params.max_idle_timeout`
+ *
+ * If |conn| is initialized as client, these parameters are
+ * synthesized from the remote transport parameters received from
+ * server.  Otherwise, they are the local transport parameters that
+ * are set by the local endpoint.
+ *
+ * This function returns the number of bytes written, or one of the
+ * following negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOBUF`
+ *     Buffer is too small.
+ */
+DWNX_EXTERN
+dwnx_ssize dwnx_conn_encode_0rtt_transport_params(const dwnx_conn *conn,
+                                                  uint8_t *dest,
+                                                  size_t destlen);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_decode_and_set_0rtt_transport_params` decodes QUIC
+ * transport parameters from |data| of length |datalen|, which is
+ * assumed to be the parameters received from the server in the
+ * previous connection, and sets it to |conn|.  These parameters are
+ * used to send 0-RTT data.  QUIC requires that client application
+ * should remember transport parameters along with a session ticket.
+ *
+ * At least following fields should be included:
+ *
+ * - :member:`dwnx_transport_params.initial_max_streams_bidi`
+ * - :member:`dwnx_transport_params.initial_max_streams_uni`
+ * - :member:`dwnx_transport_params.initial_max_stream_data_bidi_local`
+ * - :member:`dwnx_transport_params.initial_max_stream_data_bidi_remote`
+ * - :member:`dwnx_transport_params.initial_max_stream_data_uni`
+ * - :member:`dwnx_transport_params.initial_max_data`
+ *
+ * This function must only be used by client.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_MALFORMED_TRANSPORT_PARAM`
+ *     The input is malformed.
+ */
+DWNX_EXTERN int dwnx_conn_decode_and_set_0rtt_transport_params(
+  dwnx_conn *conn, const uint8_t *data, size_t datalen);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_tls_early_data_rejected` tells |conn| that early data
+ * was rejected by a server during TLS handshake, or client decided
+ * not to attempt early data for some reason.  Only client can call
+ * this function.  |conn| discards the following connection states:
+ *
+ * - Any opened streams.
+ * - Stream identifier allocations.
+ * - Max data extended by `dwnx_conn_extend_max_offset`.
+ * - Max bidi streams extended by `dwnx_conn_extend_max_streams_bidi`.
+ * - Max uni streams extended by `dwnx_conn_extend_max_streams_uni`.
+ *
+ * Application that wishes to retransmit early data, it has to open
+ * streams, and send stream data again.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE`
+ *     User callback failed
+ */
+DWNX_EXTERN int dwnx_conn_tls_early_data_rejected(dwnx_conn *conn);
+
+/**
+ * @function
+ *
  * `dwnx_is_bidi_stream` returns nonzero if |stream_id| denotes
  * bidirectional stream.
  */

@@ -57,6 +57,10 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr);
 
 void dwnx_write_record(dwnx_buf *dest, const dwnx_frame *fr, size_t n);
 
+int dwnx_conn_read_transport_params(dwnx_conn *conn,
+                                    const dwnx_transport_params *remote_params,
+                                    dwnx_tstamp ts);
+
 void dwnx_read_transport_params(dwnx_conn *conn,
                                 const dwnx_transport_params *remote_params,
                                 dwnx_tstamp ts);

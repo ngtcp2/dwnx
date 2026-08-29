@@ -678,6 +678,13 @@ static int conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
     return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
   }
 
+  if (conn->flags & DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET) {
+    rv = dwnx_conn_validate_early_transport_params(conn);
+    if (rv != 0) {
+      return rv;
+    }
+  }
+
   conn->tx.bidi.max_streams = remote_params->initial_max_streams_bidi;
   conn->tx.uni.max_streams = remote_params->initial_max_streams_uni;
   conn->tx.max_offset = remote_params->initial_max_data;
@@ -3151,6 +3158,171 @@ dwnx_ssize dwnx_conn_write_connection_close(dwnx_conn *conn, uint8_t *dest,
   conn->rx.rcrd.state = DWNX_RECORD_READ_STATE_CLOSING;
 
   return (dwnx_ssize)nwrite;
+}
+
+dwnx_ssize dwnx_conn_encode_0rtt_transport_params(const dwnx_conn *conn,
+                                                  uint8_t *dest,
+                                                  size_t destlen) {
+  dwnx_transport_params params;
+  const dwnx_transport_params *src;
+
+  if (conn->server) {
+    src = &conn->local.transport_params;
+  } else {
+    src = &conn->remote.transport_params;
+  }
+
+  dwnx_transport_params_default(&params);
+
+  params.initial_max_streams_bidi = src->initial_max_streams_bidi;
+  params.initial_max_streams_uni = src->initial_max_streams_uni;
+  params.initial_max_stream_data_bidi_local =
+    src->initial_max_stream_data_bidi_local;
+  params.initial_max_stream_data_bidi_remote =
+    src->initial_max_stream_data_bidi_remote;
+  params.initial_max_stream_data_uni = src->initial_max_stream_data_uni;
+  params.initial_max_data = src->initial_max_data;
+
+  if (conn->server) {
+    params.max_idle_timeout = src->max_idle_timeout;
+  }
+
+  return dwnx_transport_params_encode(dest, destlen, &params);
+}
+
+int dwnx_conn_decode_and_set_0rtt_transport_params(dwnx_conn *conn,
+                                                   const uint8_t *data,
+                                                   size_t datalen) {
+  dwnx_transport_params params;
+  int rv;
+
+  assert(!conn->server);
+
+  rv = dwnx_transport_params_decode(&params, data, datalen);
+  if (rv != 0) {
+    return rv;
+  }
+
+  return dwnx_conn_set_0rtt_remote_transport_params(conn, &params);
+}
+
+int dwnx_conn_set_0rtt_remote_transport_params(
+  dwnx_conn *conn, const dwnx_transport_params *params) {
+  dwnx_transport_params *p;
+
+  assert(!conn->server);
+
+  p = &conn->remote.transport_params;
+
+  dwnx_transport_params_default(p);
+
+  p->initial_max_streams_bidi = params->initial_max_streams_bidi;
+  p->initial_max_streams_uni = params->initial_max_streams_uni;
+  p->initial_max_stream_data_bidi_local =
+    params->initial_max_stream_data_bidi_local;
+  p->initial_max_stream_data_bidi_remote =
+    params->initial_max_stream_data_bidi_remote;
+  p->initial_max_stream_data_uni = params->initial_max_stream_data_uni;
+  p->initial_max_data = params->initial_max_data;
+
+  /* These parameters are treated specially.  If server accepts early
+     data, it must not set values for these parameters that are
+     smaller than these remembered values. */
+  conn->early.transport_params = (dwnx_early_transport_params){
+    .initial_max_streams_bidi = params->initial_max_streams_bidi,
+    .initial_max_streams_uni = params->initial_max_streams_uni,
+    .initial_max_stream_data_bidi_local =
+      params->initial_max_stream_data_bidi_local,
+    .initial_max_stream_data_bidi_remote =
+      params->initial_max_stream_data_bidi_remote,
+    .initial_max_stream_data_uni = params->initial_max_stream_data_uni,
+    .initial_max_data = params->initial_max_data,
+  };
+
+  conn->tx.bidi.max_streams = p->initial_max_streams_bidi;
+  conn->tx.uni.max_streams = p->initial_max_streams_uni;
+  conn->tx.max_offset = p->initial_max_data;
+
+  conn->flags |= DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET;
+
+  return 0;
+}
+
+int dwnx_conn_validate_early_transport_params(const dwnx_conn *conn) {
+  const dwnx_early_transport_params *early = &conn->early.transport_params;
+  const dwnx_transport_params *params = &conn->remote.transport_params;
+
+  assert(!conn->server);
+
+  if (early->initial_max_data > params->initial_max_data ||
+      early->initial_max_stream_data_bidi_local >
+        params->initial_max_stream_data_bidi_local ||
+      early->initial_max_stream_data_bidi_remote >
+        params->initial_max_stream_data_bidi_remote ||
+      early->initial_max_stream_data_uni >
+        params->initial_max_stream_data_uni ||
+      early->initial_max_streams_bidi > params->initial_max_streams_bidi ||
+      early->initial_max_streams_uni > params->initial_max_streams_uni) {
+    return DWNX_ERR_PROTO;
+  }
+
+  return 0;
+}
+
+int dwnx_conn_tls_early_data_rejected(dwnx_conn *conn) {
+  assert(!conn->server);
+
+  if (conn->flags & DWNX_CONN_FLAG_EARLY_DATA_REJECTED) {
+    return 0;
+  }
+
+  conn->flags |= DWNX_CONN_FLAG_EARLY_DATA_REJECTED;
+
+  dwnx_conn_discard_early_data_state(conn);
+
+  return 0;
+}
+
+static int delete_strm_tx_strmq(void *data, void *ptr) {
+  dwnx_conn *conn = ptr;
+  dwnx_strm *strm = data;
+
+  if (dwnx_strm_is_tx_queued(strm)) {
+    dwnx_pq_remove(&conn->tx.strmq, &strm->pe);
+  }
+
+  dwnx_strm_free(strm);
+  dwnx_mem_free(conn->mem, strm);
+
+  return 0;
+}
+
+void dwnx_conn_discard_early_data_state(dwnx_conn *conn) {
+  assert(!conn->server);
+
+  conn->flags &= ~DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET;
+  conn->early.transport_params = (dwnx_early_transport_params){0};
+  dwnx_transport_params_default(&conn->remote.transport_params);
+
+  dwnx_map_each(&conn->strms, delete_strm_tx_strmq, conn);
+  dwnx_map_clear(&conn->strms);
+
+  conn->tx.bidi.max_streams = 0;
+  conn->tx.uni.max_streams = 0;
+  conn->tx.offset = conn->tx.max_offset = 0;
+  conn->tx.last_blocked_offset = UINT64_MAX;
+
+  conn->rx.unsent_max_offset = conn->rx.max_offset =
+    conn->local.transport_params.initial_max_data;
+
+  conn->rx.bidi.unsent_max_streams = conn->rx.bidi.max_streams =
+    conn->local.transport_params.initial_max_streams_bidi;
+
+  conn->rx.uni.unsent_max_streams = conn->rx.uni.max_streams =
+    conn->local.transport_params.initial_max_streams_uni;
+
+  conn->tx.bidi.next_stream_id = 0;
+  conn->tx.uni.next_stream_id = 2;
 }
 
 static void ccerr_init(dwnx_ccerr *ccerr, dwnx_ccerr_type type,

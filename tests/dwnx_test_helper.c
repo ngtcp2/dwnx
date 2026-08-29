@@ -164,12 +164,11 @@ void dwnx_write_record(dwnx_buf *dest, const dwnx_frame *fr, size_t n) {
   dwnx_put_uvarintw(p, (uint64_t)(dest->last - p - 2), 2);
 }
 
-void dwnx_read_transport_params(dwnx_conn *conn,
-                                const dwnx_transport_params *remote_params,
-                                dwnx_tstamp ts) {
+int dwnx_conn_read_transport_params(dwnx_conn *conn,
+                                    const dwnx_transport_params *remote_params,
+                                    dwnx_tstamp ts) {
   uint8_t rawbuf[16384];
   dwnx_buf buf;
-  int rv;
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
   dwnx_write_record(&buf,
@@ -182,7 +181,15 @@ void dwnx_read_transport_params(dwnx_conn *conn,
                     },
                     1);
 
-  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ts);
+  return dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ts);
+}
+
+void dwnx_read_transport_params(dwnx_conn *conn,
+                                const dwnx_transport_params *remote_params,
+                                dwnx_tstamp ts) {
+  int rv;
+
+  rv = dwnx_conn_read_transport_params(conn, remote_params, ts);
 
   assert_int(0, ==, rv);
   assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
