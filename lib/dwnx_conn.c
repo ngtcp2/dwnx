@@ -850,7 +850,6 @@ static int conn_recv_reset_stream(dwnx_conn *conn,
   dwnx_strm *strm;
   int local_stream = conn_local_stream(conn, fr->stream_id);
   int bidi = bidi_stream(fr->stream_id);
-  uint64_t datalen;
   dwnx_idtr *idtr;
   int rv;
   (void)ts;
@@ -874,10 +873,6 @@ static int conn_recv_reset_stream(dwnx_conn *conn,
     }
 
     idtr = &conn->uni.idtr;
-  }
-
-  if (DWNX_MAX_VARINT < fr->final_size) {
-    return DWNX_ERR_FLOW_CONTROL;
   }
 
   strm = dwnx_conn_find_stream(conn, fr->stream_id);
@@ -917,18 +912,8 @@ static int conn_recv_reset_stream(dwnx_conn *conn,
     return DWNX_ERR_PROTO;
   }
 
-  if (strm->rx.last_offset > fr->final_size) {
+  if (strm->rx.last_offset != fr->final_size) {
     return DWNX_ERR_FINAL_SIZE;
-  }
-
-  if (strm->rx.max_offset < fr->final_size) {
-    return DWNX_ERR_FLOW_CONTROL;
-  }
-
-  datalen = fr->final_size - strm->rx.last_offset;
-
-  if (conn_max_data_violated(conn, datalen)) {
-    return DWNX_ERR_FLOW_CONTROL;
   }
 
   rv = conn_call_stream_reset(conn, fr->stream_id, fr->final_size,
@@ -937,13 +922,6 @@ static int conn_recv_reset_stream(dwnx_conn *conn,
     return rv;
   }
 
-  conn->rx.offset += datalen;
-
-  /* Extend connection flow control window for the amount of data
-     which are not passed to application. */
-  dwnx_conn_extend_max_offset(conn, datalen);
-
-  strm->rx.last_offset = fr->final_size;
   strm->flags |= DWNX_STRM_FLAG_SHUT_RD | DWNX_STRM_FLAG_RESET_STREAM_RECVED |
                  DWNX_STRM_FLAG_RX_APP_ERROR_CODE_SET;
   strm->rx.app_error_code = fr->app_error_code;
