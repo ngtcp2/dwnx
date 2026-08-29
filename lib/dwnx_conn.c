@@ -563,29 +563,6 @@ void dwnx_conn_extend_max_streams_uni(dwnx_conn *conn, size_t n) {
 }
 
 /*
- * conn_initial_stream_rx_offset returns the initial maximum offset of
- * data for a stream denoted by |stream_id|.
- */
-static uint64_t conn_initial_stream_rx_offset(dwnx_conn *conn,
-                                              int64_t stream_id) {
-  int local_stream = conn_local_stream(conn, stream_id);
-
-  if (bidi_stream(stream_id)) {
-    if (local_stream) {
-      return conn->local.transport_params.initial_max_stream_data_bidi_local;
-    }
-
-    return conn->local.transport_params.initial_max_stream_data_bidi_remote;
-  }
-
-  if (local_stream) {
-    return 0;
-  }
-
-  return conn->local.transport_params.initial_max_stream_data_uni;
-}
-
-/*
  * conn_reset_stream adds RESET_STREAM frame to the transmission
  * queue.
  *
@@ -630,9 +607,8 @@ static int set_max_stream_offset(void *data, void *ptr) {
   uint64_t max_offset;
   int rv;
 
-  if (!conn_local_stream(conn, strm->stream_id)) {
-    return 0;
-  }
+  assert(!conn->server);
+  assert(conn_local_stream(conn, strm->stream_id));
 
   if (bidi_stream(strm->stream_id)) {
     max_offset = remote_params->initial_max_stream_data_bidi_remote;
@@ -921,9 +897,8 @@ static int conn_recv_reset_stream(dwnx_conn *conn,
       return DWNX_ERR_PROTO;
     }
 
-    if (conn_initial_stream_rx_offset(conn, fr->stream_id) < fr->final_size ||
-        conn_max_data_violated(conn, fr->final_size)) {
-      return DWNX_ERR_FLOW_CONTROL;
+    if (fr->final_size != 0) {
+      return DWNX_ERR_FINAL_SIZE;
     }
 
     /* Stream is reset before we create dwnx_strm object. */
