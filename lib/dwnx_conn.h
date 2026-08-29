@@ -69,10 +69,6 @@ struct dwnx_conn {
   } remote;
 
   struct {
-    dwnx_early_transport_params transport_params;
-  } early;
-
-  struct {
     dwnx_idtr idtr;
   } bidi;
 
@@ -285,9 +281,9 @@ int dwnx_conn_set_0rtt_remote_transport_params(
 
 /*
  * dwnx_conn_validate_early_transport_params validates that the limits
- * in transport parameters remembered by client for early data are not
- * reduced.  This function is only used by client and should only be
- * called when early data is accepted by server.
+ * in transport parameters |early_params| remembered by client for
+ * early data are not reduced.  This function is only used by client
+ * and should only be called when early data is accepted by server.
  *
  * This function returns 0 if it succeeds, or one of the following
  * negative error codes:
@@ -295,7 +291,8 @@ int dwnx_conn_set_0rtt_remote_transport_params(
  * DWNX_ERR_PROTO
  *     One or more of the transport parameter limits are reduced.
  */
-int dwnx_conn_validate_early_transport_params(const dwnx_conn *conn);
+int dwnx_conn_validate_early_transport_params(
+  const dwnx_conn *conn, const dwnx_transport_params *early_params);
 
 /*
  * dwnx_conn_discard_early_data_state discards any connection states
