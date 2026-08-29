@@ -56,6 +56,9 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_send_stream_data_blocked),
   munit_void_test(test_dwnx_conn_handle_expiry),
   munit_void_test(test_dwnx_conn_write_connection_close),
+  munit_void_test(test_dwnx_conn_encode_0rtt_transport_params),
+  munit_void_test(test_dwnx_conn_validate_early_transport_params),
+  munit_void_test(test_dwnx_conn_tls_early_data_rejected),
   munit_test_end(),
 };
 
@@ -3529,6 +3532,357 @@ void test_dwnx_conn_write_connection_close(void) {
   assert_ptrdiff(0, ==, nwrite);
   assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
               conn->rx.rcrd.state);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_encode_0rtt_transport_params(void) {
+  dwnx_conn *conn;
+  uint8_t buf[256];
+  dwnx_tstamp ts = 0;
+  dwnx_transport_params remote_params, params;
+  dwnx_ssize nwrite;
+  int rv;
+
+  dwnx_transport_params_default(&remote_params);
+
+  remote_params.initial_max_streams_bidi = 1000000007;
+  remote_params.initial_max_streams_uni = 1000000009;
+  remote_params.initial_max_stream_data_bidi_local = UINT32_MAX;
+  remote_params.initial_max_stream_data_bidi_remote = 999;
+  remote_params.initial_max_stream_data_uni = 99929324311;
+  remote_params.initial_max_data = 4521373001;
+  remote_params.max_idle_timeout = 300 * DWNX_MILLISECONDS;
+
+  /* client */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &remote_params, ts);
+
+  nwrite = dwnx_conn_encode_0rtt_transport_params(conn, buf, sizeof(buf));
+
+  assert_ptrdiff(0, <, nwrite);
+
+  rv = dwnx_transport_params_decode(&params, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+  assert_uint64(remote_params.initial_max_streams_bidi, ==,
+                params.initial_max_streams_bidi);
+  assert_uint64(remote_params.initial_max_streams_uni, ==,
+                params.initial_max_streams_uni);
+  assert_uint64(remote_params.initial_max_stream_data_bidi_local, ==,
+                params.initial_max_stream_data_bidi_local);
+  assert_uint64(remote_params.initial_max_stream_data_bidi_remote, ==,
+                params.initial_max_stream_data_bidi_remote);
+  assert_uint64(remote_params.initial_max_data, ==, params.initial_max_data);
+  assert_uint64(0, ==, params.max_idle_timeout);
+
+  dwnx_conn_del(conn);
+
+  /* server */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &remote_params, ts);
+
+  nwrite = dwnx_conn_encode_0rtt_transport_params(conn, buf, sizeof(buf));
+
+  assert_ptrdiff(0, <, nwrite);
+
+  rv = dwnx_transport_params_decode(&params, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+  assert_uint64(conn->local.transport_params.initial_max_streams_bidi, ==,
+                params.initial_max_streams_bidi);
+  assert_uint64(conn->local.transport_params.initial_max_streams_uni, ==,
+                params.initial_max_streams_uni);
+  assert_uint64(conn->local.transport_params.initial_max_stream_data_bidi_local,
+                ==, params.initial_max_stream_data_bidi_local);
+  assert_uint64(
+    conn->local.transport_params.initial_max_stream_data_bidi_remote, ==,
+    params.initial_max_stream_data_bidi_remote);
+  assert_uint64(conn->local.transport_params.initial_max_data, ==,
+                params.initial_max_data);
+  assert_uint64(conn->local.transport_params.max_idle_timeout, ==,
+                params.max_idle_timeout);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_validate_early_transport_params(void) {
+  dwnx_conn *conn;
+  uint8_t buf[256];
+  dwnx_tstamp ts = 0;
+  dwnx_transport_params early_params, remote_params;
+  dwnx_ssize nwrite;
+  int rv;
+
+  dwnx_transport_params_default(&early_params);
+
+  early_params.initial_max_streams_bidi = 1000000007;
+  early_params.initial_max_streams_uni = 1000000009;
+  early_params.initial_max_stream_data_bidi_local = 12323333;
+  early_params.initial_max_stream_data_bidi_remote = 84843434;
+  early_params.initial_max_stream_data_uni = 99929324311;
+  early_params.initial_max_data = 4521373001;
+
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &early_params, ts);
+
+  nwrite = dwnx_conn_encode_0rtt_transport_params(conn, buf, sizeof(buf));
+
+  assert_ptrdiff(0, <, nwrite);
+
+  dwnx_conn_del(conn);
+
+  setup_default_client(&conn);
+
+  rv =
+    dwnx_conn_decode_and_set_0rtt_transport_params(conn, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+  assert_uint64(early_params.initial_max_streams_bidi, ==,
+                conn->remote.transport_params.initial_max_streams_bidi);
+  assert_uint64(early_params.initial_max_streams_uni, ==,
+                conn->remote.transport_params.initial_max_streams_uni);
+  assert_uint64(
+    early_params.initial_max_stream_data_bidi_local, ==,
+    conn->remote.transport_params.initial_max_stream_data_bidi_local);
+  assert_uint64(
+    early_params.initial_max_stream_data_bidi_remote, ==,
+    conn->remote.transport_params.initial_max_stream_data_bidi_remote);
+  assert_uint64(early_params.initial_max_data, ==,
+                conn->remote.transport_params.initial_max_data);
+
+  assert_uint64(early_params.initial_max_streams_bidi, ==,
+                conn->early.transport_params.initial_max_streams_bidi);
+  assert_uint64(early_params.initial_max_streams_uni, ==,
+                conn->early.transport_params.initial_max_streams_uni);
+  assert_uint64(
+    early_params.initial_max_stream_data_bidi_local, ==,
+    conn->early.transport_params.initial_max_stream_data_bidi_local);
+  assert_uint64(
+    early_params.initial_max_stream_data_bidi_remote, ==,
+    conn->early.transport_params.initial_max_stream_data_bidi_remote);
+  assert_uint64(early_params.initial_max_data, ==,
+                conn->early.transport_params.initial_max_data);
+
+  dwnx_read_transport_params(conn, &early_params, ++ts);
+
+  dwnx_conn_del(conn);
+
+  /* server reduced initial_max_streams_bidi */
+  setup_default_client(&conn);
+
+  rv =
+    dwnx_conn_decode_and_set_0rtt_transport_params(conn, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+
+  remote_params = early_params;
+  --remote_params.initial_max_streams_bidi;
+
+  rv = dwnx_conn_read_transport_params(conn, &remote_params, ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* server reduced initial_max_streams_uni */
+  setup_default_client(&conn);
+
+  rv =
+    dwnx_conn_decode_and_set_0rtt_transport_params(conn, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+
+  remote_params = early_params;
+  --remote_params.initial_max_streams_uni;
+
+  rv = dwnx_conn_read_transport_params(conn, &remote_params, ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* server reduced initial_max_stream_data_bidi_local */
+  setup_default_client(&conn);
+
+  rv =
+    dwnx_conn_decode_and_set_0rtt_transport_params(conn, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+
+  remote_params = early_params;
+  --remote_params.initial_max_stream_data_bidi_local;
+
+  rv = dwnx_conn_read_transport_params(conn, &remote_params, ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* server reduced initial_max_stream_data_bidi_remote */
+  setup_default_client(&conn);
+
+  rv =
+    dwnx_conn_decode_and_set_0rtt_transport_params(conn, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+
+  remote_params = early_params;
+  --remote_params.initial_max_stream_data_bidi_remote;
+
+  rv = dwnx_conn_read_transport_params(conn, &remote_params, ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* server reduced initial_max_stream_data_uni */
+  setup_default_client(&conn);
+
+  rv =
+    dwnx_conn_decode_and_set_0rtt_transport_params(conn, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+
+  remote_params = early_params;
+  --remote_params.initial_max_stream_data_uni;
+
+  rv = dwnx_conn_read_transport_params(conn, &remote_params, ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* server reduced initial_max_data */
+  setup_default_client(&conn);
+
+  rv =
+    dwnx_conn_decode_and_set_0rtt_transport_params(conn, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+
+  remote_params = early_params;
+  --remote_params.initial_max_data;
+
+  rv = dwnx_conn_read_transport_params(conn, &remote_params, ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_tls_early_data_rejected(void) {
+  dwnx_conn *conn;
+  uint8_t paramsbuf[256];
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_tstamp ts = 0;
+  dwnx_transport_params early_params;
+  dwnx_ssize nwrite;
+  int rv;
+  int64_t stream_id;
+  dwnx_ssize ndatalen;
+  dwnx_strm *strm;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+
+  dwnx_transport_params_default(&early_params);
+
+  early_params.initial_max_streams_bidi = 100;
+  early_params.initial_max_streams_uni = 100;
+  early_params.initial_max_stream_data_bidi_local = 16384;
+  early_params.initial_max_stream_data_bidi_remote = 1024;
+  early_params.initial_max_stream_data_uni = 1024;
+  early_params.initial_max_data = 2048;
+
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &early_params, ts);
+
+  nwrite =
+    dwnx_conn_encode_0rtt_transport_params(conn, paramsbuf, sizeof(paramsbuf));
+
+  assert_ptrdiff(0, <, nwrite);
+
+  dwnx_conn_del(conn);
+
+  setup_default_client(&conn);
+
+  rv = dwnx_conn_decode_and_set_0rtt_transport_params(conn, paramsbuf,
+                                                      (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+  assert_true(conn->flags & DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  nwrite = dwnx_conn_write_stream(conn, buf.pos, dwnx_buf_left(&buf), &ndatalen,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
+                                  nulldata, sizeof(nulldata), ++ts);
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
+  assert_ptrdiff(0, <, ndatalen);
+
+  rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  nwrite = dwnx_conn_write_stream(conn, buf.pos, dwnx_buf_left(&buf), &ndatalen,
+                                  DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
+                                  nulldata, sizeof(nulldata), ++ts);
+  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(0, <, ndatalen);
+
+  rv = dwnx_conn_shutdown_stream_write(conn, 0, stream_id, DWNX_NO_ERROR);
+
+  assert_int(0, ==, rv);
+  assert_uint64(conn->remote.transport_params.initial_max_data, ==,
+                conn->tx.offset);
+  assert_uint64(conn->remote.transport_params.initial_max_data, ==,
+                conn->tx.last_blocked_offset);
+  assert_int64(4, ==, conn->tx.bidi.next_stream_id);
+  assert_int64(6, ==, conn->tx.uni.next_stream_id);
+  assert_size(2, ==, dwnx_map_size(&conn->strms));
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_true(dwnx_strm_is_tx_queued(strm));
+
+  dwnx_conn_extend_max_streams_bidi(conn, 1);
+
+  assert_uint64(conn->rx.bidi.max_streams + 1, ==,
+                conn->rx.bidi.unsent_max_streams);
+
+  dwnx_conn_extend_max_streams_uni(conn, 1);
+
+  assert_uint64(conn->rx.uni.max_streams + 1, ==,
+                conn->rx.uni.unsent_max_streams);
+
+  dwnx_conn_extend_max_offset(conn, 1);
+
+  assert_uint64(conn->rx.max_offset + 1, ==, conn->rx.unsent_max_offset);
+
+  rv = dwnx_conn_tls_early_data_rejected(conn);
+
+  assert_int(0, ==, rv);
+  assert_true(conn->flags & DWNX_CONN_FLAG_EARLY_DATA_REJECTED);
+  assert_false(conn->flags & DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET);
+  assert_uint64(0, ==, conn->early.transport_params.initial_max_data);
+  assert_uint64(0, ==, conn->remote.transport_params.initial_max_data);
+  assert_uint64(0, ==, conn->tx.bidi.max_streams);
+  assert_uint64(0, ==, conn->tx.uni.max_streams);
+  assert_uint64(0, ==, conn->tx.offset);
+  assert_uint64(0, ==, conn->tx.max_offset);
+  assert_uint64(UINT64_MAX, ==, conn->tx.last_blocked_offset);
+  assert_int64(0, ==, conn->tx.bidi.next_stream_id);
+  assert_int64(2, ==, conn->tx.uni.next_stream_id);
+  assert_size(0, ==, dwnx_map_size(&conn->strms));
+  assert_true(dwnx_pq_empty(&conn->tx.strmq));
+  assert_uint64(conn->rx.bidi.max_streams, ==,
+                conn->rx.bidi.unsent_max_streams);
+  assert_uint64(conn->rx.uni.max_streams, ==, conn->rx.uni.unsent_max_streams);
+  assert_uint64(conn->rx.max_offset, ==, conn->rx.unsent_max_offset);
 
   dwnx_conn_del(conn);
 }

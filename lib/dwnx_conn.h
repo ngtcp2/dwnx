@@ -40,8 +40,21 @@
 
 #define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SEEN 0x01U
 #define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SENT 0x02U
+#define DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET 0x04U
+#define DWNX_CONN_FLAG_EARLY_DATA_REJECTED 0x08U
 
 typedef struct dwnx_strm dwnx_strm;
+
+/* dwnx_early_transport_params is the values remembered by client from
+   the previous session. */
+typedef struct dwnx_early_transport_params {
+  uint64_t initial_max_streams_bidi;
+  uint64_t initial_max_streams_uni;
+  uint64_t initial_max_stream_data_bidi_local;
+  uint64_t initial_max_stream_data_bidi_remote;
+  uint64_t initial_max_stream_data_uni;
+  uint64_t initial_max_data;
+} dwnx_early_transport_params;
 
 struct dwnx_conn {
   const dwnx_mem *mem;
@@ -54,6 +67,10 @@ struct dwnx_conn {
   struct {
     dwnx_transport_params transport_params;
   } remote;
+
+  struct {
+    dwnx_early_transport_params transport_params;
+  } early;
 
   struct {
     dwnx_idtr idtr;
@@ -262,5 +279,28 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
                                  dwnx_tstamp ts);
 
 dwnx_tstamp dwnx_conn_get_idle_expiry(const dwnx_conn *conn);
+
+int dwnx_conn_set_0rtt_remote_transport_params(
+  dwnx_conn *conn, const dwnx_transport_params *params);
+
+/*
+ * dwnx_conn_validate_early_transport_params validates that the limits
+ * in transport parameters remembered by client for early data are not
+ * reduced.  This function is only used by client and should only be
+ * called when early data is accepted by server.
+ *
+ * This function returns 0 if it succeeds, or one of the following
+ * negative error codes:
+ *
+ * DWNX_ERR_PROTO
+ *     One or more of the transport parameter limits are reduced.
+ */
+int dwnx_conn_validate_early_transport_params(const dwnx_conn *conn);
+
+/*
+ * dwnx_conn_discard_early_data_state discards any connection states
+ * which are altered by any operations during early data transfer.
+ */
+void dwnx_conn_discard_early_data_state(dwnx_conn *conn);
 
 #endif /* !defined(DWNX_CONN_H) */
