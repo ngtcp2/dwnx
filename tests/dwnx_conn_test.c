@@ -3651,19 +3651,6 @@ void test_dwnx_conn_validate_early_transport_params(void) {
   assert_uint64(early_params.initial_max_data, ==,
                 conn->remote.transport_params.initial_max_data);
 
-  assert_uint64(early_params.initial_max_streams_bidi, ==,
-                conn->early.transport_params.initial_max_streams_bidi);
-  assert_uint64(early_params.initial_max_streams_uni, ==,
-                conn->early.transport_params.initial_max_streams_uni);
-  assert_uint64(
-    early_params.initial_max_stream_data_bidi_local, ==,
-    conn->early.transport_params.initial_max_stream_data_bidi_local);
-  assert_uint64(
-    early_params.initial_max_stream_data_bidi_remote, ==,
-    conn->early.transport_params.initial_max_stream_data_bidi_remote);
-  assert_uint64(early_params.initial_max_data, ==,
-                conn->early.transport_params.initial_max_data);
-
   dwnx_read_transport_params(conn, &early_params, ++ts);
 
   dwnx_conn_del(conn);
@@ -3868,7 +3855,6 @@ void test_dwnx_conn_tls_early_data_rejected(void) {
   assert_int(0, ==, rv);
   assert_true(conn->flags & DWNX_CONN_FLAG_EARLY_DATA_REJECTED);
   assert_false(conn->flags & DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET);
-  assert_uint64(0, ==, conn->early.transport_params.initial_max_data);
   assert_uint64(0, ==, conn->remote.transport_params.initial_max_data);
   assert_uint64(0, ==, conn->tx.bidi.max_streams);
   assert_uint64(0, ==, conn->tx.uni.max_streams);

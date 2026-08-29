@@ -662,6 +662,11 @@ static int conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
                                       size_t datalen) {
   int rv;
   const dwnx_transport_params *remote_params;
+  dwnx_transport_params early_params;
+
+  if (conn->flags & DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET) {
+    early_params = conn->remote.transport_params;
+  }
 
   rv =
     dwnx_transport_params_decode(&conn->remote.transport_params, data, datalen);
@@ -679,7 +684,7 @@ static int conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
   }
 
   if (conn->flags & DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET) {
-    rv = dwnx_conn_validate_early_transport_params(conn);
+    rv = dwnx_conn_validate_early_transport_params(conn, &early_params);
     if (rv != 0) {
       return rv;
     }
@@ -3216,6 +3221,9 @@ int dwnx_conn_set_0rtt_remote_transport_params(
 
   dwnx_transport_params_default(p);
 
+  /* These parameters are treated specially.  If server accepts early
+     data, it must not set values for these parameters that are
+     smaller than these remembered values. */
   p->initial_max_streams_bidi = params->initial_max_streams_bidi;
   p->initial_max_streams_uni = params->initial_max_streams_uni;
   p->initial_max_stream_data_bidi_local =
@@ -3224,20 +3232,6 @@ int dwnx_conn_set_0rtt_remote_transport_params(
     params->initial_max_stream_data_bidi_remote;
   p->initial_max_stream_data_uni = params->initial_max_stream_data_uni;
   p->initial_max_data = params->initial_max_data;
-
-  /* These parameters are treated specially.  If server accepts early
-     data, it must not set values for these parameters that are
-     smaller than these remembered values. */
-  conn->early.transport_params = (dwnx_early_transport_params){
-    .initial_max_streams_bidi = params->initial_max_streams_bidi,
-    .initial_max_streams_uni = params->initial_max_streams_uni,
-    .initial_max_stream_data_bidi_local =
-      params->initial_max_stream_data_bidi_local,
-    .initial_max_stream_data_bidi_remote =
-      params->initial_max_stream_data_bidi_remote,
-    .initial_max_stream_data_uni = params->initial_max_stream_data_uni,
-    .initial_max_data = params->initial_max_data,
-  };
 
   conn->tx.bidi.max_streams = p->initial_max_streams_bidi;
   conn->tx.uni.max_streams = p->initial_max_streams_uni;
@@ -3248,21 +3242,22 @@ int dwnx_conn_set_0rtt_remote_transport_params(
   return 0;
 }
 
-int dwnx_conn_validate_early_transport_params(const dwnx_conn *conn) {
-  const dwnx_early_transport_params *early = &conn->early.transport_params;
+int dwnx_conn_validate_early_transport_params(
+  const dwnx_conn *conn, const dwnx_transport_params *early_params) {
   const dwnx_transport_params *params = &conn->remote.transport_params;
 
   assert(!conn->server);
 
-  if (early->initial_max_data > params->initial_max_data ||
-      early->initial_max_stream_data_bidi_local >
+  if (early_params->initial_max_data > params->initial_max_data ||
+      early_params->initial_max_stream_data_bidi_local >
         params->initial_max_stream_data_bidi_local ||
-      early->initial_max_stream_data_bidi_remote >
+      early_params->initial_max_stream_data_bidi_remote >
         params->initial_max_stream_data_bidi_remote ||
-      early->initial_max_stream_data_uni >
+      early_params->initial_max_stream_data_uni >
         params->initial_max_stream_data_uni ||
-      early->initial_max_streams_bidi > params->initial_max_streams_bidi ||
-      early->initial_max_streams_uni > params->initial_max_streams_uni) {
+      early_params->initial_max_streams_bidi >
+        params->initial_max_streams_bidi ||
+      early_params->initial_max_streams_uni > params->initial_max_streams_uni) {
     return DWNX_ERR_PROTO;
   }
 
@@ -3301,7 +3296,6 @@ void dwnx_conn_discard_early_data_state(dwnx_conn *conn) {
   assert(!conn->server);
 
   conn->flags &= ~DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET;
-  conn->early.transport_params = (dwnx_early_transport_params){0};
   dwnx_transport_params_default(&conn->remote.transport_params);
 
   dwnx_map_each(&conn->strms, delete_strm_tx_strmq, conn);
