@@ -142,6 +142,8 @@ log_fr_qx_transport_parameters(dwnx_log *log,
   dwnx_log_infof_raw(
     log, DWNX_LOG_EVENT_FRM, DWNX_LOG_TP_HD(dir, fr),
     "max_idle_timeout=", params->max_idle_timeout / DWNX_MILLISECONDS);
+  dwnx_log_infof_raw(log, DWNX_LOG_EVENT_FRM, DWNX_LOG_TP_HD(dir, fr),
+                     "max_record_size=", params->max_record_size);
 #undef DWNX_LOG_TP_HD
 }
 

@@ -27,6 +27,7 @@ check_PROGRAMS = main
 OBJECTS = \
 	dwnx_conn_test.c \
 	dwnx_frame_test.c \
+	dwnx_log_test.c \
 	dwnx_test_helper.c \
 	dwnx_transport_params_test.c \
 	main.c \
@@ -35,6 +36,7 @@ OBJECTS = \
 HFILES = \
 	dwnx_conn_test.h \
 	dwnx_frame_test.h \
+	dwnx_log_test.h \
 	dwnx_test_helper.h \
 	dwnx_transport_params_test.h \
 	munit/munit.h
