@@ -866,7 +866,7 @@ static int conn_recv_reset_stream(dwnx_conn *conn,
     idtr = &conn->bidi.idtr;
   } else {
     if (local_stream) {
-      return DWNX_ERR_PROTO;
+      return DWNX_ERR_STREAM_STATE;
     }
     if (conn->rx.uni.max_streams < dwnx_ord_stream_id(fr->stream_id)) {
       return DWNX_ERR_STREAM_LIMIT;
