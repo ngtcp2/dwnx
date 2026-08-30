@@ -106,6 +106,11 @@ int dwnx_qre_encode_frame(dwnx_qre *qre, const dwnx_frame *fr);
 size_t dwnx_qre_final(dwnx_qre *qre);
 
 /*
+ * dwnx_qre_reset unsets DWNX_QRE_FLAG_STARTED flag.
+ */
+void dwnx_qre_reset(dwnx_qre *qre);
+
+/*
  * dwnx_qre_left returns the number of bytes left in the current
  * buffer.
  */

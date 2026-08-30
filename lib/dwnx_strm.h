@@ -76,6 +76,9 @@
 /* DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED is set when
    STREAM_DATA_BLOCKED and/or DATA_BLOCKED frames should be sent. */
 #define DWNX_STRM_FLAG_SEND_STREAM_DATA_BLOCKED 0x20000U
+/* DWNX_STRM_FLAG_ANY_SENT indicates that any STREAM frame,
+   including empty one, has been sent. */
+#define DWNX_STRM_FLAG_ANY_SENT 0x40000U
 
 typedef struct dwnx_strm {
   const dwnx_mem *mem;

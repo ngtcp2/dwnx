@@ -39,6 +39,9 @@ void dwnx_qre_init(dwnx_qre *qre, dwnx_log *log) {
 void dwnx_qre_start(dwnx_qre *qre, uint8_t *buf, size_t buflen) {
   assert(buflen >= DWNX_QRE_RECORDLEN_SIZE);
 
+  buflen =
+    dwnx_min(buflen, DWNX_QRE_RECORDLEN_SIZE + DWNX_DEFAULT_MAX_RECORD_SIZE);
+
   qre->flags |= DWNX_QRE_FLAG_STARTED;
   dwnx_buf_init(&qre->buf, buf, buflen);
   /* Leave the space for the record length */
@@ -55,23 +58,13 @@ dwnx_ssize dwnx_qre_stream_max_datalen(const dwnx_qre *qre, int64_t stream_id,
   size_t n = 1 /* type */ + dwnx_put_uvarintlen((uint64_t)stream_id) +
              (offset ? dwnx_put_uvarintlen(offset) : 0);
 
+  assert(left <= DWNX_DEFAULT_MAX_RECORD_SIZE);
+
   if (left <= n) {
     return -1;
   }
 
   left -= n;
-
-  if (left > 8 + 1073741823 && len > 1073741823) {
-    len = dwnx_min(len, 4611686018427387903UL);
-
-    return (dwnx_ssize)dwnx_min(len, (uint64_t)(left - 8));
-  }
-
-  if (left > 4 + 16383 && len > 16383) {
-    len = dwnx_min(len, 1073741823);
-
-    return (dwnx_ssize)dwnx_min(len, (uint64_t)(left - 4));
-  }
 
   if (left > 2 + 63 && len > 63) {
     len = dwnx_min(len, 16383);
@@ -116,5 +109,7 @@ size_t dwnx_qre_final(dwnx_qre *qre) {
 
   return len;
 }
+
+void dwnx_qre_reset(dwnx_qre *qre) { qre->flags &= ~DWNX_QRE_FLAG_STARTED; }
 
 size_t dwnx_qre_left(const dwnx_qre *qre) { return dwnx_buf_left(&qre->buf); }

@@ -66,5 +66,7 @@ munit_void_test_decl(test_dwnx_conn_stream_close)
 munit_void_test_decl(test_dwnx_conn_read)
 munit_void_test_decl(test_dwnx_conn_close_stream)
 munit_void_test_decl(test_dwnx_conn_shutdown_stream)
+munit_void_test_decl(test_dwnx_conn_open_bidi_stream)
+munit_void_test_decl(test_dwnx_conn_open_uni_stream)
 
 #endif /* !defined(DWNX_CONN_TEST_H) */
