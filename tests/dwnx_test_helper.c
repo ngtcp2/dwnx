@@ -197,17 +197,23 @@ void dwnx_read_transport_params(dwnx_conn *conn,
   assert_size(0, ==, conn->rx.rcrd.record_left);
 }
 
-const uint8_t *dwnx_read_recordlen(uint64_t *plen, const uint8_t *data,
-                                   size_t datalen) {
+uint64_t dwnx_read_recordlen(dwnx_buf *data) {
+  uint64_t reclen;
   size_t n;
 
-  assert_size(0, !=, datalen);
+  assert_size(0, !=, dwnx_buf_len(data));
 
-  n = dwnx_get_uvarintlen(data);
+  n = dwnx_get_uvarintlen(data->pos);
 
-  assert_size(datalen, >=, n);
+  assert_size(dwnx_buf_len(data), >=, n);
 
-  return dwnx_get_uvarint(plen, data);
+  data->pos = (uint8_t *)dwnx_get_uvarint(&reclen, data->pos);
+
+  assert_uint64(dwnx_buf_len(data), >=, reclen);
+
+  data->last = data->pos + reclen;
+
+  return reclen;
 }
 
 int64_t dwnx_nth_local_bidi_stream_id(dwnx_conn *conn, uint64_t n) {

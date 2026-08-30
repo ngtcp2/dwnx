@@ -65,8 +65,7 @@ void dwnx_read_transport_params(dwnx_conn *conn,
                                 const dwnx_transport_params *remote_params,
                                 dwnx_tstamp ts);
 
-const uint8_t *dwnx_read_recordlen(uint64_t *plen, const uint8_t *data,
-                                   size_t datalen);
+uint64_t dwnx_read_recordlen(dwnx_buf *data);
 
 int64_t dwnx_nth_local_bidi_stream_id(dwnx_conn *conn, uint64_t n);
 
