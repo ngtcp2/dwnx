@@ -353,6 +353,18 @@ dwnx_frame_encode_connection_close(uint8_t *out, size_t outlen,
 
 void dwnx_frd_init(dwnx_frd *frd) { (void)frd; }
 
+dwnx_ssize dwnx_frd_decode_buf(dwnx_frd *frd, dwnx_frame *dest,
+                               dwnx_buf *payload) {
+  dwnx_ssize nread;
+
+  nread = dwnx_frd_decode(frd, dest, payload->pos, dwnx_buf_len(payload));
+  if (nread > 0) {
+    payload->pos += nread;
+  }
+
+  return nread;
+}
+
 dwnx_ssize dwnx_frd_decode(dwnx_frd *frd, dwnx_frame *dest,
                            const uint8_t *payload, size_t payloadlen) {
   uint64_t long_type;

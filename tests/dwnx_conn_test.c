@@ -2264,19 +2264,19 @@ void test_dwnx_conn_recv_stop_sending(void) {
   assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
-  nread = dwnx_frd_decode(&frd, fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_QX_TRANSPORT_PARAMETERS, ==, fr->hd.type);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_RESET_STREAM, ==, fr->hd.type);
   assert_int64(stream_id, ==, fr->reset_stream.stream_id);
   assert_uint64(0, ==, fr->reset_stream.final_size);
@@ -4446,9 +4446,10 @@ void test_dwnx_conn_recv_qx_ping(void) {
   buf.last += nwrite;
   dwnx_check_recordlen(&buf, nwrite - DWNX_QRE_RECORDLEN_SIZE);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_QX_PING_RESPONSE, ==, fr.hd.type);
   assert_uint64(1000000009, ==, fr.qx_ping.seq);
 
@@ -4695,13 +4696,14 @@ void test_dwnx_conn_writev_stream(void) {
   assert_ptrdiff(2, <, nwrite);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_QX_TRANSPORT_PARAMETERS, ==, fr.hd.type);
   assert_uint64(
     64 * 1024, ==,
@@ -4738,19 +4740,19 @@ void test_dwnx_conn_writev_stream(void) {
   assert_ptrdiff(16339, ==, datalen);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_QX_TRANSPORT_PARAMETERS, ==, fr.hd.type);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_false(fr.stream.fin);
@@ -4789,13 +4791,14 @@ void test_dwnx_conn_writev_stream(void) {
                            DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_false(fr.stream.fin);
@@ -4822,19 +4825,19 @@ void test_dwnx_conn_writev_stream(void) {
   assert_ptrdiff(16339, ==, datalen);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_QX_TRANSPORT_PARAMETERS, ==, fr.hd.type);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_false(fr.stream.fin);
@@ -4858,13 +4861,14 @@ void test_dwnx_conn_writev_stream(void) {
   assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_true(fr.stream.fin);
@@ -4907,48 +4911,44 @@ void test_dwnx_conn_writev_stream(void) {
   assert_ptrdiff(16322, ==, datalen);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_QX_TRANSPORT_PARAMETERS, ==, fr.hd.type);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_MAX_DATA, ==, fr.hd.type);
   assert_uint64(128 * 1024 + 1000000007, ==, fr.max_data.max_data);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_MAX_STREAM_DATA, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.max_stream_data.stream_id);
   assert_uint64(64 * 1024 + 1000000009, ==, fr.max_stream_data.max_stream_data);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_MAX_STREAMS_BIDI, ==, fr.hd.type);
   assert_uint64(10 + 999, ==, fr.max_streams.max_streams);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_MAX_STREAMS_UNI, ==, fr.hd.type);
   assert_uint64(10 + 9999, ==, fr.max_streams.max_streams);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_false(fr.stream.fin);
@@ -4976,19 +4976,19 @@ void test_dwnx_conn_writev_stream(void) {
   assert_ptrdiff(16339, ==, datalen);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_QX_TRANSPORT_PARAMETERS, ==, fr.hd.type);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_false(fr.stream.fin);
@@ -5017,12 +5017,12 @@ void test_dwnx_conn_writev_stream(void) {
                            DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  rclen = dwnx_read_recordlen(&buf);
 
   assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), >, nread);
+  assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_false(fr.stream.fin);
@@ -5031,10 +5031,10 @@ void test_dwnx_conn_writev_stream(void) {
   assert_size(1, ==, fr.stream.datacnt);
   assert_size(fr.stream.len, ==, fr.stream.data[0].len);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
   assert_uint64(16339 + 8237, ==, fr.stream_data_blocked.offset);
@@ -5054,7 +5054,6 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   dwnx_frame fr;
   dwnx_strm *strm;
   int64_t stream_id;
-  uint64_t rclen;
   int rv;
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
@@ -5085,18 +5084,18 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_ptrdiff(-1, ==, datalen);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
   assert_uint64(0, ==, fr.data_blocked.offset);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
   assert_uint64(0, ==, fr.stream_data_blocked.offset);
@@ -5139,26 +5138,25 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_ptrdiff(77, ==, datalen);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_uint64(77, ==, fr.stream.len);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
   assert_uint64(77, ==, fr.data_blocked.offset);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
   assert_uint64(77, ==, fr.stream_data_blocked.offset);
@@ -5213,11 +5211,12 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_uint64(77, ==, fr.stream.len);
@@ -5236,11 +5235,12 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
   assert_uint64(77, ==, fr.stream_data_blocked.offset);
@@ -5276,19 +5276,19 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_ptrdiff(77, ==, datalen);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_STREAM, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream.stream_id);
   assert_uint64(77, ==, fr.stream.len);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
   assert_uint64(77, ==, fr.data_blocked.offset);
 
@@ -5308,11 +5308,12 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_ptrdiff(-1, ==, datalen);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
   assert_uint64(77, ==, fr.stream_data_blocked.offset);
@@ -5382,7 +5383,6 @@ void test_dwnx_conn_write_connection_close(void) {
   dwnx_ssize nwrite, nread;
   dwnx_frd frd;
   dwnx_frame fr;
-  uint64_t rclen;
   int rv;
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
@@ -5408,11 +5408,12 @@ void test_dwnx_conn_write_connection_close(void) {
               conn->rx.rcrd.state);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_CONNECTION_CLOSE, ==, fr.hd.type);
   assert_uint64(ccerr.error_code, ==, fr.connection_close.error_code);
   assert_uint64(ccerr.frame_type, ==, fr.connection_close.frame_type);
@@ -5458,11 +5459,12 @@ void test_dwnx_conn_write_connection_close(void) {
               conn->rx.rcrd.state);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_CONNECTION_CLOSE, ==, fr.hd.type);
   assert_uint64(ccerr.error_code, ==, fr.connection_close.error_code);
   assert_uint64(ccerr.frame_type, ==, fr.connection_close.frame_type);
@@ -5491,11 +5493,12 @@ void test_dwnx_conn_write_connection_close(void) {
               conn->rx.rcrd.state);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_CONNECTION_CLOSE_APP, ==, fr.hd.type);
   assert_uint64(ccerr.error_code, ==, fr.connection_close.error_code);
   assert_size(ccerr.reasonlen, ==, fr.connection_close.reasonlen);
@@ -6328,7 +6331,6 @@ void test_dwnx_conn_shutdown_stream(void) {
   dwnx_strm *strm;
   dwnx_ssize nwrite, nread;
   dwnx_frd frd;
-  uint64_t rclen;
   int rv;
   int64_t stream_id;
 
@@ -6391,9 +6393,9 @@ void test_dwnx_conn_shutdown_stream(void) {
   assert_null(dwnx_conn_find_stream(conn, 0x07));
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_RESET_STREAM, ==, fr.hd.type);
@@ -6401,10 +6403,10 @@ void test_dwnx_conn_shutdown_stream(void) {
   assert_uint64(0xAE02, ==, fr.reset_stream.app_error_code);
   assert_uint64(0, ==, fr.reset_stream.final_size);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_RESET_STREAM, ==, fr.hd.type);
   assert_int64(0x07, ==, fr.reset_stream.stream_id);
   assert_uint64(0xAE01, ==, fr.reset_stream.app_error_code);
@@ -6463,11 +6465,12 @@ void test_dwnx_conn_shutdown_stream(void) {
   assert_false(strm->flags & DWNX_STRM_FLAG_SHUT_RD);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STOP_SENDING, ==, fr.hd.type);
   assert_int64(0x02, ==, fr.stop_sending.stream_id);
   assert_uint64(0xAE01, ==, fr.stop_sending.app_error_code);
@@ -6534,9 +6537,9 @@ void test_dwnx_conn_shutdown_stream(void) {
   assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
-  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+  dwnx_read_recordlen(&buf);
 
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
   assert_ptrdiff(0, <, nread);
   assert_uint64(DWNX_FRAME_RESET_STREAM, ==, fr.hd.type);
@@ -6544,10 +6547,10 @@ void test_dwnx_conn_shutdown_stream(void) {
   assert_uint64(0xAE01, ==, fr.reset_stream.app_error_code);
   assert_uint64(10, ==, fr.reset_stream.final_size);
 
-  buf.pos += nread;
-  nread = dwnx_frd_decode(&frd, &fr, buf.pos, dwnx_buf_len(&buf));
+  nread = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
-  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_ptrdiff(0, <, nread);
+  assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STOP_SENDING, ==, fr.hd.type);
   assert_int64(0x00, ==, fr.stop_sending.stream_id);
   assert_uint64(0xAE01, ==, fr.stop_sending.app_error_code);
