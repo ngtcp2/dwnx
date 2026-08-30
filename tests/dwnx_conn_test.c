@@ -4526,8 +4526,8 @@ void test_dwnx_conn_extend_max_stream_offset(void) {
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
-  /* Extending the max stream offset of non-existent stream is
-     noop. */
+  /* Extending the max stream offset of non-existent stream is a
+     no-op. */
   setup_default_server(&conn);
   dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
 
@@ -6052,7 +6052,7 @@ void test_dwnx_conn_tls_early_data_rejected(void) {
   assert_uint64(conn->rx.uni.max_streams, ==, conn->rx.uni.unsent_max_streams);
   assert_uint64(conn->rx.max_offset, ==, conn->rx.unsent_max_offset);
 
-  /* Calling the function again is noop */
+  /* Calling the function again is a no-op */
   rv = dwnx_conn_tls_early_data_rejected(conn);
 
   assert_int(0, ==, rv);
@@ -6311,7 +6311,7 @@ void test_dwnx_conn_read(void) {
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
-  /* Reading empty byte string in a non-terminal state is noop */
+  /* Reading empty byte string in a non-terminal state is a no-op */
   setup_default_server(&conn);
   dwnx_read_transport_params(conn, &empty_remote_params, ts);
 
@@ -6499,7 +6499,7 @@ void test_dwnx_conn_shutdown_stream(void) {
   assert_true(strm->flags & DWNX_STRM_FLAG_SEND_RESET_STREAM);
   assert_true(strm->flags & DWNX_STRM_FLAG_SHUT_WR);
 
-  /* Calling again against the same stream ID is noop */
+  /* Calling again against the same stream ID is a no-op */
   rv = dwnx_conn_shutdown_stream_write(conn, 0, 0x07, 0xAE01);
 
   assert_int(0, ==, rv);
@@ -6575,7 +6575,7 @@ void test_dwnx_conn_shutdown_stream(void) {
   assert_true(strm->flags & DWNX_STRM_FLAG_SEND_STOP_SENDING);
   assert_false(strm->flags & DWNX_STRM_FLAG_SHUT_RD);
 
-  /* Calling again with the same stream ID is noop */
+  /* Calling again with the same stream ID is a no-op */
   rv = dwnx_conn_shutdown_stream_read(conn, 0, 0x02, 0xAE01);
 
   assert_int(0, ==, rv);
@@ -6602,7 +6602,7 @@ void test_dwnx_conn_shutdown_stream(void) {
 
   dwnx_conn_del(conn);
 
-  /* Shutting down non-existing stream is noop */
+  /* Shutting down non-existing stream is a no-op */
   setup_default_server(&conn);
   dwnx_read_transport_params(conn, &empty_remote_params, ts);
 
