@@ -2518,6 +2518,12 @@ uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn) {
   return n > conn->tx.uni.max_streams ? 0 : conn->tx.uni.max_streams - n + 1;
 }
 
+dwnx_ssize dwnx_conn_write_record(dwnx_conn *conn, uint8_t *dest,
+                                  size_t destlen, dwnx_tstamp ts) {
+  return dwnx_conn_writev_stream(conn, dest, destlen, NULL,
+                                 DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ts);
+}
+
 dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
                                   size_t destlen, dwnx_ssize *pdatalen,
                                   uint32_t flags, int64_t stream_id,

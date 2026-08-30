@@ -1445,6 +1445,17 @@ DWNX_EXTERN dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
 /**
  * @function
  *
+ * `dwnx_conn_write_record` is shorthand for calling
+ * `dwnx_conn_writev_stream(conn, dest, destlen, NULL,
+ * DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ts)
+ * <dwnx_conn_writev_stream>`.
+ */
+DWNX_EXTERN dwnx_ssize dwnx_conn_write_record(dwnx_conn *conn, uint8_t *dest,
+                                              size_t destlen, dwnx_tstamp ts);
+
+/**
+ * @function
+ *
  * `dwnx_conn_is_local_stream` returns nonzero if |stream_id| denotes
  * a locally initiated stream.
  */
