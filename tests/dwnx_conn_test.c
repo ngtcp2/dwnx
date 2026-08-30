@@ -68,6 +68,13 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_shutdown_stream),
   munit_void_test(test_dwnx_conn_open_bidi_stream),
   munit_void_test(test_dwnx_conn_open_uni_stream),
+  munit_void_test(test_dwnx_conn_is_local_stream),
+  munit_void_test(test_dwnx_conn_is_server),
+  munit_void_test(test_dwnx_conn_get_timestamp),
+  munit_void_test(test_dwnx_conn_get_local_transport_params),
+  munit_void_test(test_dwnx_conn_get_idle_expiry),
+  munit_void_test(test_dwnx_is_bidi_stream),
+  munit_void_test(test_dwnx_ccerr),
   munit_test_end(),
 };
 
@@ -5528,6 +5535,11 @@ void test_dwnx_conn_write_connection_close(void) {
     .reason = reason,
   };
 
+  nwrite = dwnx_conn_write_connection_close(
+    conn, buf.pos, DWNX_QRE_RECORDLEN_SIZE, &ccerr, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, nwrite);
+
   nwrite = dwnx_conn_write_connection_close(conn, buf.pos, dwnx_buf_left(&buf),
                                             &ccerr, ++ts);
 
@@ -6039,6 +6051,11 @@ void test_dwnx_conn_tls_early_data_rejected(void) {
                 conn->rx.bidi.unsent_max_streams);
   assert_uint64(conn->rx.uni.max_streams, ==, conn->rx.uni.unsent_max_streams);
   assert_uint64(conn->rx.max_offset, ==, conn->rx.unsent_max_offset);
+
+  /* Calling the function again is noop */
+  rv = dwnx_conn_tls_early_data_rejected(conn);
+
+  assert_int(0, ==, rv);
 
   dwnx_conn_del(conn);
 }
@@ -6785,4 +6802,217 @@ void test_dwnx_conn_open_uni_stream(void) {
   assert_true(strm->flags & DWNX_STRM_FLAG_SHUT_RD);
 
   dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_is_local_stream(void) {
+  dwnx_conn *conn;
+
+  setup_default_client(&conn);
+
+  assert_true(dwnx_conn_is_local_stream(conn, 0x00));
+  assert_true(dwnx_conn_is_local_stream(conn, 0x02));
+  assert_false(dwnx_conn_is_local_stream(conn, 0x01));
+  assert_false(dwnx_conn_is_local_stream(conn, 0x03));
+
+  dwnx_conn_del(conn);
+
+  setup_default_server(&conn);
+
+  assert_false(dwnx_conn_is_local_stream(conn, 0x00));
+  assert_false(dwnx_conn_is_local_stream(conn, 0x02));
+  assert_true(dwnx_conn_is_local_stream(conn, 0x01));
+  assert_true(dwnx_conn_is_local_stream(conn, 0x03));
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_is_server(void) {
+  dwnx_conn *conn;
+
+  setup_default_client(&conn);
+
+  assert_false(dwnx_conn_is_server(conn));
+
+  dwnx_conn_del(conn);
+
+  setup_default_server(&conn);
+
+  assert_true(dwnx_conn_is_server(conn));
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_get_timestamp(void) {
+  dwnx_conn *conn;
+  dwnx_tstamp ts = 0;
+
+  setup_default_client(&conn);
+
+  assert_uint64(0, ==, dwnx_conn_get_timestamp(conn));
+
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  assert_uint64(1, ==, dwnx_conn_get_timestamp(conn));
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_get_local_transport_params(void) {
+  dwnx_conn *conn;
+  const dwnx_transport_params *p;
+
+  setup_default_client(&conn);
+
+  p = dwnx_conn_get_local_transport_params(conn);
+
+  assert_ptr_equal(&conn->local.transport_params, p);
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_conn_get_idle_expiry(void) {
+  dwnx_conn *conn;
+  dwnx_transport_params params, remote_params;
+  conn_options opts;
+
+  /* Both side disables idle timeout */
+  dwnx_transport_params_default(&params);
+  dwnx_transport_params_default(&remote_params);
+
+  opts = (conn_options){
+    .params = &params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &remote_params, DWNX_SECONDS);
+
+  assert_uint64(UINT64_MAX, ==, dwnx_conn_get_idle_expiry(conn));
+
+  dwnx_conn_del(conn);
+
+  /* The remote endpoint enables idle timeout */
+  dwnx_transport_params_default(&params);
+  dwnx_transport_params_default(&remote_params);
+  remote_params.max_idle_timeout = 30 * DWNX_SECONDS;
+
+  opts = (conn_options){
+    .params = &params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &remote_params, DWNX_MILLISECONDS);
+
+  assert_uint64(30 * DWNX_SECONDS + DWNX_MILLISECONDS, ==,
+                dwnx_conn_get_idle_expiry(conn));
+
+  dwnx_conn_del(conn);
+
+  /* The local endpoint enables idle timeout */
+  dwnx_transport_params_default(&params);
+  params.max_idle_timeout = 30 * DWNX_SECONDS;
+  dwnx_transport_params_default(&remote_params);
+
+  opts = (conn_options){
+    .params = &params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &remote_params, DWNX_MICROSECONDS);
+
+  assert_uint64(30 * DWNX_SECONDS + DWNX_MICROSECONDS, ==,
+                dwnx_conn_get_idle_expiry(conn));
+
+  dwnx_conn_del(conn);
+
+  /* Both ends enable idle timeout, and the remote timeout is
+     shorter */
+  dwnx_transport_params_default(&params);
+  params.max_idle_timeout = 30 * DWNX_SECONDS;
+  dwnx_transport_params_default(&remote_params);
+  remote_params.max_idle_timeout = 10 * DWNX_SECONDS;
+
+  opts = (conn_options){
+    .params = &params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &remote_params, DWNX_NANOSECONDS);
+
+  assert_uint64(10 * DWNX_SECONDS + DWNX_NANOSECONDS, ==,
+                dwnx_conn_get_idle_expiry(conn));
+
+  dwnx_conn_del(conn);
+
+  /* Both ends enable idle timeout, and the local timeout is
+     shorter */
+  dwnx_transport_params_default(&params);
+  params.max_idle_timeout = 20 * DWNX_SECONDS;
+  dwnx_transport_params_default(&remote_params);
+  remote_params.max_idle_timeout = 30 * DWNX_SECONDS;
+
+  opts = (conn_options){
+    .params = &params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &remote_params, DWNX_NANOSECONDS);
+
+  assert_uint64(20 * DWNX_SECONDS + DWNX_NANOSECONDS, ==,
+                dwnx_conn_get_idle_expiry(conn));
+
+  dwnx_conn_del(conn);
+}
+
+void test_dwnx_is_bidi_stream(void) {
+  assert_true(dwnx_is_bidi_stream(0x00));
+  assert_false(dwnx_is_bidi_stream(0x02));
+  assert_true(dwnx_is_bidi_stream(0x01));
+  assert_false(dwnx_is_bidi_stream(0x03));
+}
+
+void test_dwnx_ccerr(void) {
+  dwnx_ccerr ccerr;
+  const uint8_t reason[] = "reason";
+
+  /* Default */
+  dwnx_ccerr_default(&ccerr);
+
+  assert_enum(dwnx_ccerr_type, DWNX_CCERR_TYPE_TRANSPORT, ==, ccerr.type);
+  assert_uint64(DWNX_NO_ERROR, ==, ccerr.error_code);
+  assert_null(ccerr.reason);
+  assert_size(0, ==, ccerr.reasonlen);
+
+  /* Transport error */
+  dwnx_ccerr_set_transport_error(&ccerr, DWNX_PROTOCOL_VIOLATION, reason,
+                                 dwnx_strlen_lit(reason));
+
+  assert_enum(dwnx_ccerr_type, DWNX_CCERR_TYPE_TRANSPORT, ==, ccerr.type);
+  assert_uint64(DWNX_PROTOCOL_VIOLATION, ==, ccerr.error_code);
+  assert_memn_equal(reason, dwnx_strlen_lit(reason), ccerr.reason,
+                    ccerr.reasonlen);
+
+  /* Library error */
+  dwnx_ccerr_set_liberr(&ccerr, DWNX_ERR_FRAME_ENCODING, NULL, 0);
+
+  assert_enum(dwnx_ccerr_type, DWNX_CCERR_TYPE_TRANSPORT, ==, ccerr.type);
+  assert_uint64(DWNX_FRAME_ENCODING_ERROR, ==, ccerr.error_code);
+  assert_null(ccerr.reason);
+  assert_size(0, ==, ccerr.reasonlen);
+
+  /* Library error (idle close) */
+  dwnx_ccerr_set_liberr(&ccerr, DWNX_ERR_IDLE_CLOSE, reason,
+                        dwnx_strlen_lit(reason));
+
+  assert_enum(dwnx_ccerr_type, DWNX_CCERR_TYPE_IDLE_CLOSE, ==, ccerr.type);
+  assert_uint64(DWNX_NO_ERROR, ==, ccerr.error_code);
+  assert_memn_equal(reason, dwnx_strlen_lit(reason), ccerr.reason,
+                    ccerr.reasonlen);
+
+  /* Application error */
+  dwnx_ccerr_set_application_error(&ccerr, 0xAE01, NULL, 0);
+
+  assert_enum(dwnx_ccerr_type, DWNX_CCERR_TYPE_APPLICATION, ==, ccerr.type);
+  assert_uint64(0xAE01, ==, ccerr.error_code);
+  assert_null(ccerr.reason);
+  assert_size(0, ==, ccerr.reasonlen);
 }

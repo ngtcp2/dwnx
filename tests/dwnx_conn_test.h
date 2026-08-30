@@ -68,5 +68,12 @@ munit_void_test_decl(test_dwnx_conn_close_stream)
 munit_void_test_decl(test_dwnx_conn_shutdown_stream)
 munit_void_test_decl(test_dwnx_conn_open_bidi_stream)
 munit_void_test_decl(test_dwnx_conn_open_uni_stream)
+munit_void_test_decl(test_dwnx_conn_is_local_stream)
+munit_void_test_decl(test_dwnx_conn_is_server)
+munit_void_test_decl(test_dwnx_conn_get_timestamp)
+munit_void_test_decl(test_dwnx_conn_get_local_transport_params)
+munit_void_test_decl(test_dwnx_conn_get_idle_expiry)
+munit_void_test_decl(test_dwnx_is_bidi_stream)
+munit_void_test_decl(test_dwnx_ccerr)
 
 #endif /* !defined(DWNX_CONN_TEST_H) */
