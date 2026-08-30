@@ -64,5 +64,7 @@ munit_void_test_decl(test_dwnx_conn_validate_early_transport_params)
 munit_void_test_decl(test_dwnx_conn_tls_early_data_rejected)
 munit_void_test_decl(test_dwnx_conn_stream_close)
 munit_void_test_decl(test_dwnx_conn_read)
+munit_void_test_decl(test_dwnx_conn_close_stream)
+munit_void_test_decl(test_dwnx_conn_shutdown_stream)
 
 #endif /* !defined(DWNX_CONN_TEST_H) */
