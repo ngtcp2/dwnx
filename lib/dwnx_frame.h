@@ -32,6 +32,7 @@
 #include <dwnx/dwnx.h>
 
 #include "dwnx_transport_params.h"
+#include "dwnx_buf.h"
 
 #define DWNX_FRAME_QX_TRANSPORT_PARAMETERS 0x3F5153300D0A0D0AULL
 #define DWNX_FRAME_QX_PING_REQUEST 0x348C67529EF8C7BDULL
@@ -327,6 +328,9 @@ typedef struct dwnx_frd {
 } dwnx_frd;
 
 void dwnx_frd_init(dwnx_frd *frd);
+
+dwnx_ssize dwnx_frd_decode_buf(dwnx_frd *frd, dwnx_frame *dest,
+                               dwnx_buf *payload);
 
 dwnx_ssize dwnx_frd_decode(dwnx_frd *frd, dwnx_frame *dest,
                            const uint8_t *payload, size_t payloadlen);
