@@ -2569,7 +2569,7 @@ dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
     }
 
     if (datalen == 0 && !(flags & DWNX_WRITE_STREAM_FLAG_FIN) &&
-        strm->tx.offset) {
+        (strm->flags & DWNX_STRM_FLAG_ANY_SENT)) {
       pvmsg = NULL;
     } else {
       if ((uint64_t)datalen > DWNX_MAX_VARINT - strm->tx.offset ||
@@ -2607,15 +2607,13 @@ dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
     return DWNX_ERR_NOBUF;
   }
 
-  destlen =
-    dwnx_min(destlen, DWNX_QRE_RECORDLEN_SIZE + DWNX_DEFAULT_MAX_RECORD_SIZE);
-
   if (!dwnx_qre_has_started(&conn->tx.qre)) {
     dwnx_qre_start(&conn->tx.qre, dest, destlen);
 
     if (!(conn->flags & DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SENT)) {
       rv = dwnx_conn_write_transport_params(conn, ts);
       if (rv != 0) {
+        dwnx_qre_reset(&conn->tx.qre);
         return rv;
       }
 
@@ -2979,6 +2977,7 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
     return rv;
   }
 
+  strm->flags |= DWNX_STRM_FLAG_ANY_SENT;
   strm->tx.offset += (uint64_t)wdatalen;
   conn->tx.offset += (uint64_t)wdatalen;
 
