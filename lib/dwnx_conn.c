@@ -1263,11 +1263,10 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
   for (; p != end;) {
     switch (rcrd->state) {
     case DWNX_RECORD_READ_STATE_RECORD_SIZE:
+      /* dwnx_varint_reader_read may fail only when fin != 0 */
       nread =
         dwnx_varint_reader_read(vird, p, (size_t)(end - p), /* fin = */ 0);
-      if (nread < 0) {
-        return DWNX_ERR_FRAME_ENCODING;
-      }
+      assert(nread > 0);
 
       p += nread;
       if (!dwnx_varint_reader_done(vird)) {
