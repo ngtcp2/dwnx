@@ -1551,7 +1551,7 @@ void test_dwnx_conn_recv_reset_stream(void) {
 
   rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
 
-  assert_int(DWNX_ERR_PROTO, ==, rv);
+  assert_int(DWNX_ERR_STREAM_STATE, ==, rv);
 
   dwnx_conn_del(conn);
 
@@ -1588,7 +1588,10 @@ void test_dwnx_conn_recv_stop_sending(void) {
   userdata ud;
   conn_options opts;
   size_t i;
-  dwnx_ssize nwrite;
+  dwnx_ssize nwrite, nread;
+  int64_t stream_id;
+  uint64_t rclen;
+  dwnx_frd frd;
 
   server_default_callbacks(&callbacks);
   callbacks.stream_open = stream_open;
@@ -1602,6 +1605,7 @@ void test_dwnx_conn_recv_stop_sending(void) {
   };
 
   dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+  dwnx_frd_init(&frd);
 
   opts = (conn_options){
     .callbacks = &callbacks,
@@ -1630,6 +1634,13 @@ void test_dwnx_conn_recv_stop_sending(void) {
   assert_size(1, ==, ud.recv_stop_sending.ncalled);
   assert_int64(4, ==, ud.recv_stop_sending.stream_id);
   assert_uint64(1000000007, ==, ud.recv_stop_sending.app_error_code);
+
+  strm = dwnx_conn_find_stream(conn, 4);
+
+  assert_not_null(strm);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SEND_RESET_STREAM);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SHUT_WR);
+  assert_true(strm->flags & DWNX_STRM_FLAG_STOP_SENDING_RECVED);
 
   /* Receiving another STOP_SENDING is just fine. */
   dwnx_buf_reset(&buf);
@@ -1736,6 +1747,247 @@ void test_dwnx_conn_recv_stop_sending(void) {
   assert_null(dwnx_conn_find_stream(conn, 4));
 
   dwnx_conn_del(conn);
+
+  /* Receive STOP_SENDING against the local bidi stream that has not
+     been initiated yet */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr[0].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id = 0x01,
+    .app_error_code = 0xAE01,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_STREAM_STATE, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive STOP_SENDING against the remote bidi stream that violates
+     stream limit */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr[0].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id =
+      dwnx_nth_remote_bidi_stream_id(conn, conn->rx.bidi.max_streams + 1),
+    .app_error_code = 0xAE01,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_STREAM_LIMIT, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive STOP_SENDING against the local uni stream that has not
+     been initiated yet */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr[0].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id = 0x3,
+    .app_error_code = 0xAE01,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_STREAM_STATE, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive STOP_SENDING against the remote uni stream */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr[0].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id = 0x02,
+    .app_error_code = 0xAE01,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_STREAM_STATE, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive STOP_SENDING against the local uni stream */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  fr[0].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id = stream_id,
+    .app_error_code = 0xAE01,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SEND_RESET_STREAM);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SHUT_WR);
+  assert_true(strm->flags & DWNX_STRM_FLAG_STOP_SENDING_RECVED);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  buf.last += nwrite;
+  buf.pos = (uint8_t *)dwnx_read_recordlen(&rclen, buf.pos, dwnx_buf_len(&buf));
+
+  assert_uint64((uint64_t)dwnx_buf_len(&buf), ==, rclen);
+
+  nread = dwnx_frd_decode(&frd, fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff(0, <, nread);
+  assert_uint64(DWNX_FRAME_QX_TRANSPORT_PARAMETERS, ==, fr->hd.type);
+
+  buf.pos += nread;
+  nread = dwnx_frd_decode(&frd, fr, buf.pos, dwnx_buf_len(&buf));
+
+  assert_ptrdiff((dwnx_ssize)dwnx_buf_len(&buf), ==, nread);
+  assert_uint64(DWNX_FRAME_RESET_STREAM, ==, fr->hd.type);
+  assert_int64(stream_id, ==, fr->reset_stream.stream_id);
+  assert_uint64(0, ==, fr->reset_stream.final_size);
+  assert_uint64(0xAE01, ==, fr->reset_stream.app_error_code);
+
+  dwnx_conn_del(conn);
+
+  /* Receive STOP_SENDING against the local stream that has already
+     been closed */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  rv = dwnx_conn_shutdown_stream_write(conn, 0, stream_id, 0xAE01);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_null(dwnx_conn_find_stream(conn, stream_id));
+
+  fr[0].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .stream_id = stream_id,
+    .app_error_code = 0xAE01,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_null(dwnx_conn_find_stream(conn, stream_id));
+
+  dwnx_conn_del(conn);
+
+  /* Receive STOP_SENDING against the remote stream that has already
+     been closed */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_FIN_BIT | DWNX_STREAM_LEN_BIT,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  rv = dwnx_conn_shutdown_stream_write(conn, 0, 0, 0xAE01);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_null(dwnx_conn_find_stream(conn, 0));
+
+  fr[0].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .app_error_code = 0xAE01,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_null(dwnx_conn_find_stream(conn, 0));
+
+  dwnx_conn_del(conn);
+
+  /* Receive STOP_SENDING against the remote stream that has not been
+     initiated */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr[0].stop_sending = (dwnx_frame_stop_sending){
+    .type = DWNX_FRAME_STOP_SENDING,
+    .app_error_code = 0xAE01,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, 0);
+
+  assert_not_null(strm);
+  assert_true(strm->flags & DWNX_STRM_FLAG_SHUT_WR);
+
+  dwnx_conn_del(conn);
 }
 
 void test_dwnx_conn_recv_max_data(void) {
@@ -1793,6 +2045,44 @@ void test_dwnx_conn_recv_max_data(void) {
   assert_uint64(1000000007, ==, conn->tx.max_offset);
 
   dwnx_conn_del(conn);
+
+  /* Receive MAX_DATA whose max_data is less than the current
+     maximum */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr.max_data = (dwnx_frame_max_data){
+    .type = DWNX_FRAME_MAX_DATA,
+    .max_data = conn->tx.max_offset - 1,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_DATA whose max_data is equal to the current
+     maximum */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr.max_data = (dwnx_frame_max_data){
+    .type = DWNX_FRAME_MAX_DATA,
+    .max_data = conn->tx.max_offset,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
 }
 
 void test_dwnx_conn_recv_max_stream_data(void) {
@@ -1805,6 +2095,8 @@ void test_dwnx_conn_recv_max_stream_data(void) {
   dwnx_strm *strm;
   userdata ud;
   conn_options opts;
+  int64_t stream_id;
+  dwnx_ssize nwrite;
   size_t i;
   int rv;
 
@@ -1891,6 +2183,296 @@ void test_dwnx_conn_recv_max_stream_data(void) {
 
   assert_not_null(strm);
   assert_uint64(1000000007, ==, strm->tx.max_offset);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA against the local bidi stream that has
+     not been initiated yet */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .stream_id = 0x01,
+    .max_stream_data = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_STREAM_STATE, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA against the remote bidi stream that
+     violates stream limit */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .stream_id =
+      dwnx_nth_remote_bidi_stream_id(conn, conn->rx.bidi.max_streams + 1),
+    .max_stream_data = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_STREAM_LIMIT, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA against the remote uni stream */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .stream_id = 0x02,
+    .max_stream_data = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_STREAM_STATE, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA against the local uni stream that has not
+     been initiated yet */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .stream_id = 0x03,
+    .max_stream_data = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_STREAM_STATE, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA against the local uni stream */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .stream_id = stream_id,
+    .max_stream_data = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_uint64(1000000007, ==, strm->tx.max_offset);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA against the local stream that has been
+     closed */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  rv = dwnx_conn_shutdown_stream_write(conn, 0, stream_id, 0xAE01);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_null(dwnx_conn_find_stream(conn, stream_id));
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .stream_id = stream_id,
+    .max_stream_data = 1000000007,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_null(dwnx_conn_find_stream(conn, stream_id));
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA against the remote stream that has been
+     closed */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  fr.stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .flags = DWNX_STREAM_FIN_BIT | DWNX_STREAM_LEN_BIT,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  rv = dwnx_conn_shutdown_stream_write(conn, 0, 0, 0xAE01);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_null(dwnx_conn_find_stream(conn, 0));
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .max_stream_data = 1 << 20,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_null(dwnx_conn_find_stream(conn, 0));
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA whose max_stream_data is less than the
+     current limit */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .max_stream_data = strm->tx.max_offset - 1,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA whose max_stream_data is equal to the
+     current limit */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  rv = dwnx_conn_open_uni_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .max_stream_data = strm->tx.max_offset,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive MAX_STREAM_DATA against the local stream that is in
+     half-closed local */
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .user_data = &ud,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  rv = dwnx_conn_shutdown_stream_write(conn, 0, stream_id, 0xAE01);
+
+  assert_int(0, ==, rv);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf), NULL,
+                           DWNX_WRITE_STREAM_FLAG_NONE, -1, NULL, 0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  fr.max_stream_data = (dwnx_frame_max_stream_data){
+    .type = DWNX_FRAME_MAX_STREAM_DATA,
+    .stream_id = stream_id,
+    .max_stream_data = 1000000009,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_size(0, ==, ud.extend_max_stream_data.ncalled);
+
+  strm = dwnx_conn_find_stream(conn, stream_id);
+
+  assert_not_null(strm);
+  assert_uint64(1000000009, ==, strm->tx.max_offset);
 
   dwnx_conn_del(conn);
 }
