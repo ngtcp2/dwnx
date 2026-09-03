@@ -173,6 +173,8 @@ typedef union dwnx_frame {
 
 dwnx_ssize dwnx_frame_encode(uint8_t *out, size_t outlen, const dwnx_frame *fr);
 
+int dwnx_frame_encode_buf(dwnx_buf *buf, const dwnx_frame *fr);
+
 /*
  * dwnx_frame_encode_qx_transport_parameters encodes
  * QX_TRANSPORT_PARAMETERS frame |fr| into the buffer pointed by |out|
@@ -199,6 +201,19 @@ dwnx_ssize dwnx_frame_encode_qx_transport_parameters(
  */
 dwnx_ssize dwnx_frame_encode_qx_ping(uint8_t *out, size_t outlen,
                                      const dwnx_frame_qx_ping *fr);
+
+/*
+ * dwnx_frame_encode_padding encodes PADDING frame |fr| into the
+ * buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_padding(uint8_t *out, size_t outlen,
+                                     const dwnx_frame_padding *fr);
 
 /*
  * dwnx_frame_encode_stream encodes STREAM frame |fr| into the buffer
@@ -307,6 +322,20 @@ dwnx_frame_encode_stream_data_blocked(uint8_t *out, size_t outlen,
                                       const dwnx_frame_stream_data_blocked *fr);
 
 /*
+ * dwnx_frame_encode_streams_blocked encodes STREAMS_BLOCKED frame
+ * |fr| into the buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize
+dwnx_frame_encode_streams_blocked(uint8_t *out, size_t outlen,
+                                  const dwnx_frame_streams_blocked *fr);
+
+/*
  * dwnx_frame_encode_connection_close encodes CONNECTION_CLOSE frame
  * |fr| into the buffer pointed by |out| of length |outlen|.
  *
@@ -320,6 +349,11 @@ dwnx_ssize
 dwnx_frame_encode_connection_close(uint8_t *out, size_t outlen,
                                    const dwnx_frame_connection_close *fr);
 
+/*
+ * dwnx_frd is the QUIC frame decoder.  It does not support decoding
+ * frames in streaming fashion.  The given buffer must include the
+ * complete frame.
+ */
 typedef struct dwnx_frd {
   union {
     dwnx_vec data;
@@ -327,18 +361,65 @@ typedef struct dwnx_frd {
   } buf;
 } dwnx_frd;
 
+/*
+ * dwnx_frd_init initializes |frd|.
+ */
 void dwnx_frd_init(dwnx_frd *frd);
 
-dwnx_ssize dwnx_frd_decode_buf(dwnx_frd *frd, dwnx_frame *dest,
-                               dwnx_buf *payload);
+/*
+ * dwnx_frd_decode_buf decodes the first frame encoded in |payload|.
+ *
+ * It returns 0 if it succeeds and updates |payload|->pos to the one
+ * beyond the last byte of the decoded frame, or one of the following
+ * negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Could not decode a frame; or |payload| is empty.
+ */
+int dwnx_frd_decode_buf(dwnx_frd *frd, dwnx_frame *dest, dwnx_buf *payload);
 
+/*
+ * dwnx_frd_decode decodes the first frame encoded in the buffer
+ * pointed by |payload| of length |payloadlen|.
+ *
+ * It returns the number of bytes read to decode the first frame if it
+ * succeeds, or one of the following negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Could not decode a frame; or |payload| is empty.
+ */
 dwnx_ssize dwnx_frd_decode(dwnx_frd *frd, dwnx_frame *dest,
                            const uint8_t *payload, size_t payloadlen);
 
+/*
+ * dwnx_frame_decode_qx_transport_parameters decodes
+ * QX_TRANSPORT_PARAMETERS frame from |payload| of length
+ * |payloadlen|.  The result is stored in the object pointed by
+ * |dest|.  QX_TRANSPORT_PARAMETERS frame must start at payload[0].
+ * The caller must assign non-NULL dwnx_transport_params object to
+ * |dest|->params before calling this function.  This function
+ * finishes when it decodes one QX_TRANSPORT_PARAMETERS frame, and
+ * returns the exact number of bytes read to decode a frame if it
+ * succeeds, or one of the following negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include QX_TRANSPORT_PARAMETERS frame.
+ */
 dwnx_ssize dwnx_frame_decode_qx_transport_parameters(
   dwnx_frame_qx_transport_parameters *dest, const uint8_t *payload,
   size_t payloadlen);
 
+/*
+ * dwnx_frame_decode_stream decodes QX_PING frame from |payload| of
+ * length |payloadlen|.  The result is stored in the object pointed by
+ * |dest|.  QX_PING frame must start at payload[0].  This function
+ * finishes when it decodes one QX_PING frame, and returns the exact
+ * number of bytes read to decode a frame if it succeeds, or one of
+ * the following negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include QX_PING frame.
+ */
 dwnx_ssize dwnx_frame_decode_qx_ping(dwnx_frame_qx_ping *dest,
                                      const uint8_t *payload, size_t payloadlen);
 
@@ -357,10 +438,11 @@ dwnx_ssize dwnx_frame_decode_padding(dwnx_frame_padding *dest,
 /*
  * dwnx_frame_decode_stream decodes STREAM frame from |payload| of
  * length |payloadlen|.  The result is stored in the object pointed by
- * |dest|.  STREAM frame must start at payload[0].  This function
- * finishes when it decodes one STREAM frame, and returns the exact
- * number of bytes read to decode a frame if it succeeds, or one of
- * the following negative error codes:
+ * |dest|.  STREAM frame must start at payload[0].  The caller must
+ * assign non-NULL dwnx_vec to |dest|->data before calling this
+ * function.  This function finishes when it decodes one STREAM frame,
+ * and returns the exact number of bytes read to decode a frame if it
+ * succeeds, or one of the following negative error codes:
  *
  * DWNX_ERR_FRAME_ENCODING
  *     Payload is too short to include STREAM frame.

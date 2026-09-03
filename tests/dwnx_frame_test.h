@@ -44,7 +44,10 @@ munit_void_test_decl(test_dwnx_frame_encode_max_stream_data)
 munit_void_test_decl(test_dwnx_frame_encode_max_streams)
 munit_void_test_decl(test_dwnx_frame_encode_data_blocked)
 munit_void_test_decl(test_dwnx_frame_encode_stream_data_blocked)
+munit_void_test_decl(test_dwnx_frame_encode_streams_blocked)
 munit_void_test_decl(test_dwnx_frame_encode_connection_close)
 munit_void_test_decl(test_dwnx_frame_encode_qx_ping)
+munit_void_test_decl(test_dwnx_frame_encode_padding)
+munit_void_test_decl(test_dwnx_frd_decode)
 
 #endif /* !defined(DWNX_FRAME_TEST_H) */

@@ -78,16 +78,14 @@ dwnx_ssize dwnx_qre_stream_max_datalen(const dwnx_qre *qre, int64_t stream_id,
 }
 
 int dwnx_qre_encode_frame(dwnx_qre *qre, const dwnx_frame *fr) {
-  dwnx_ssize nwrite;
+  int rv;
 
-  nwrite = dwnx_frame_encode(qre->buf.last, dwnx_buf_left(&qre->buf), fr);
-  if (nwrite < 0) {
-    return (int)nwrite;
+  rv = dwnx_frame_encode_buf(&qre->buf, fr);
+  if (rv != 0) {
+    return rv;
   }
 
   dwnx_log_tx_fr(qre->log, fr);
-
-  qre->buf.last += nwrite;
 
   return 0;
 }
