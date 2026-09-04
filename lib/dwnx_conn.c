@@ -1197,36 +1197,14 @@ static int conn_recv_stream_data_blocked(
       return DWNX_ERR_PROTO;
     }
 
-    if (bidi) {
-      if (conn->local.transport_params.initial_max_stream_data_bidi_remote <
-          fr->max_stream_data) {
-        return DWNX_ERR_FLOW_CONTROL;
-      }
-    } else if (conn->local.transport_params.initial_max_stream_data_uni <
-               fr->max_stream_data) {
-      return DWNX_ERR_FLOW_CONTROL;
-    }
-
-    /* Allow transport parameter data limit < fr->max_stream_data
-       case.  This is fine for 0RTT, where server extends limits. */
-
-    if (conn_max_data_violated(conn, fr->max_stream_data)) {
-      return DWNX_ERR_FLOW_CONTROL;
-    }
-  } else {
-    if ((strm->flags & DWNX_STRM_FLAG_SHUT_RD) ||
-        strm->rx.last_offset > fr->max_stream_data) {
+    /* If the stream has not been created, max_stream_data must be
+       0. */
+    if (fr->max_stream_data != 0) {
       return DWNX_ERR_PROTO;
     }
-
-    if (strm->rx.max_offset < fr->max_stream_data ||
-        conn_max_data_violated(conn,
-                               fr->max_stream_data - strm->rx.last_offset)) {
-      return DWNX_ERR_FLOW_CONTROL;
-    }
-
-    /* RFC 9000 does not say that fr->offset must be equal to
-       strm->rx.last_offset.  We might tighten it later. */
+  } else if ((strm->flags & DWNX_STRM_FLAG_SHUT_RD) ||
+             strm->rx.last_offset != fr->max_stream_data) {
+    return DWNX_ERR_PROTO;
   }
 
   return 0;
