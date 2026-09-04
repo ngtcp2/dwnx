@@ -130,13 +130,13 @@ typedef struct dwnx_frame_max_streams {
 
 typedef struct dwnx_frame_data_blocked {
   uint64_t type;
-  uint64_t offset;
+  uint64_t max_data;
 } dwnx_frame_data_blocked;
 
 typedef struct dwnx_frame_stream_data_blocked {
   uint64_t type;
   int64_t stream_id;
-  uint64_t offset;
+  uint64_t max_stream_data;
 } dwnx_frame_stream_data_blocked;
 
 typedef struct dwnx_frame_streams_blocked {

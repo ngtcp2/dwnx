@@ -1153,7 +1153,7 @@ static int conn_recv_data_blocked(dwnx_conn *conn,
                                   dwnx_tstamp ts) {
   (void)ts;
 
-  if (fr->offset > conn->rx.max_offset) {
+  if (fr->max_data > conn->rx.max_offset) {
     return DWNX_ERR_FLOW_CONTROL;
   }
 
@@ -1199,28 +1199,29 @@ static int conn_recv_stream_data_blocked(
 
     if (bidi) {
       if (conn->local.transport_params.initial_max_stream_data_bidi_remote <
-          fr->offset) {
+          fr->max_stream_data) {
         return DWNX_ERR_FLOW_CONTROL;
       }
     } else if (conn->local.transport_params.initial_max_stream_data_uni <
-               fr->offset) {
+               fr->max_stream_data) {
       return DWNX_ERR_FLOW_CONTROL;
     }
 
-    /* Allow transport parameter data limit < fr->offset case.  This
-       is fine for 0RTT, where server extends limits. */
+    /* Allow transport parameter data limit < fr->max_stream_data
+       case.  This is fine for 0RTT, where server extends limits. */
 
-    if (conn_max_data_violated(conn, fr->offset)) {
+    if (conn_max_data_violated(conn, fr->max_stream_data)) {
       return DWNX_ERR_FLOW_CONTROL;
     }
   } else {
     if ((strm->flags & DWNX_STRM_FLAG_SHUT_RD) ||
-        strm->rx.last_offset > fr->offset) {
+        strm->rx.last_offset > fr->max_stream_data) {
       return DWNX_ERR_PROTO;
     }
 
-    if (strm->rx.max_offset < fr->offset ||
-        conn_max_data_violated(conn, fr->offset - strm->rx.last_offset)) {
+    if (strm->rx.max_offset < fr->max_stream_data ||
+        conn_max_data_violated(conn,
+                               fr->max_stream_data - strm->rx.last_offset)) {
       return DWNX_ERR_FLOW_CONTROL;
     }
 
@@ -1980,7 +1981,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return 0;
       }
 
-      rcrd->fr.data_blocked.offset = vird->acc;
+      rcrd->fr.data_blocked.max_data = vird->acc;
       dwnx_varint_reader_reset(vird);
 
       dwnx_log_rx_fr(&conn->log, &rcrd->fr);
@@ -2033,7 +2034,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return 0;
       }
 
-      rcrd->fr.stream_data_blocked.offset = vird->acc;
+      rcrd->fr.stream_data_blocked.max_stream_data = vird->acc;
       dwnx_varint_reader_reset(vird);
 
       dwnx_log_rx_fr(&conn->log, &rcrd->fr);
@@ -2810,7 +2811,7 @@ int dwnx_conn_write_data_blocked(dwnx_conn *conn, dwnx_tstamp ts) {
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = conn->tx.offset,
+    .max_data = conn->tx.offset,
   };
 
   rv = dwnx_qre_encode_frame(qre, &fr);
@@ -2840,7 +2841,7 @@ int dwnx_conn_write_stream_data_blocked(dwnx_conn *conn, dwnx_strm *strm,
   fr.stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = strm->stream_id,
-    .offset = strm->tx.offset,
+    .max_stream_data = strm->tx.offset,
   };
 
   rv = dwnx_qre_encode_frame(qre, &fr);
