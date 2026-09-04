@@ -3393,7 +3393,6 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = 4,
-    .max_stream_data = 64 * 1024,
   };
 
   dwnx_write_record(&buf, fr, 1);
@@ -3423,11 +3422,23 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   assert_ptrdiff(0, <, nwrite);
 
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .stream_id = stream_id,
+    .len = 100,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = stream_id,
-    .max_stream_data =
-      conn->local.transport_params.initial_max_stream_data_bidi_local,
+    .max_stream_data = 100,
   };
 
   dwnx_buf_reset(&buf);
@@ -3439,6 +3450,51 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   dwnx_conn_del(conn);
 
+  /* Receiving STREAM_DATA_BLOCKED whose max_stream_data is larger
+     than the last received offset. */
+  setup_default_server(&conn);
+  dwnx_transport_params_default(&remote_params);
+  remote_params.initial_max_streams_bidi = 1;
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  rv = dwnx_conn_open_bidi_stream(conn, &stream_id, NULL);
+
+  assert_int(0, ==, rv);
+
+  nwrite = dwnx_conn_write_stream(conn, outbuf, sizeof(outbuf), NULL,
+                                  DWNX_WRITE_STREAM_FLAG_FIN, stream_id, NULL,
+                                  0, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  fr[0].stream = (dwnx_frame_stream){
+    .type = DWNX_FRAME_STREAM,
+    .stream_id = stream_id,
+    .len = 100,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
+    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .stream_id = stream_id,
+    .max_stream_data = 101,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
   /* Receiving STREAM_DATA_BLOCKED against the local bidirectional
      stream that the local endpoint has not opened yet. */
   setup_default_server(&conn);
@@ -3447,8 +3503,6 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = 1,
-    .max_stream_data =
-      conn->local.transport_params.initial_max_stream_data_bidi_local,
   };
 
   dwnx_buf_reset(&buf);
@@ -3510,7 +3564,6 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = dwnx_nth_remote_uni_stream_id(
       conn, conn->local.transport_params.initial_max_streams_uni + 1),
-    .max_stream_data = conn->local.transport_params.initial_max_stream_data_uni,
   };
 
   dwnx_buf_reset(&buf);
@@ -3519,6 +3572,46 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
 
   assert_int(DWNX_ERR_STREAM_LIMIT, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receiving STREAM_DATA_BLOCKED against the remote unidirectional
+     stream that has not been opened yet. */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
+    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .stream_id = 0x02,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receiving STREAM_DATA_BLOCKED against the remote unidirectional
+     stream that has not been opened yet, and max_stream_data is not
+     0. */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
+    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .stream_id = 0x02,
+    .max_stream_data = 1,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
 
   dwnx_conn_del(conn);
 
@@ -3546,8 +3639,6 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[1].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = stream_id,
-    .max_stream_data =
-      conn->local.transport_params.initial_max_stream_data_bidi_local,
   };
 
   dwnx_buf_reset(&buf);
@@ -3591,8 +3682,6 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .max_stream_data =
-      conn->local.transport_params.initial_max_stream_data_bidi_remote,
   };
 
   dwnx_buf_reset(&buf);
@@ -3601,91 +3690,6 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
 
   assert_int(DWNX_ERR_PROTO, ==, rv);
-
-  dwnx_conn_del(conn);
-
-  /* Receiving STREAM_DATA_BLOCKED against the remote bidirectional
-     stream and offset violates stream level flow control limit. */
-  dwnx_transport_params_default(&params);
-  params.initial_max_streams_bidi = 1;
-  params.initial_max_data = 100;
-
-  opts = (conn_options){
-    .params = &params,
-  };
-
-  setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
-
-  fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
-    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .max_stream_data =
-      conn->local.transport_params.initial_max_stream_data_bidi_remote + 1,
-  };
-
-  dwnx_buf_reset(&buf);
-  dwnx_write_record(&buf, fr, 1);
-
-  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
-
-  assert_int(DWNX_ERR_FLOW_CONTROL, ==, rv);
-
-  dwnx_conn_del(conn);
-
-  /* Receiving STREAM_DATA_BLOCKED against the remote unidirectional
-     stream and offset violates stream level flow control limit. */
-  dwnx_transport_params_default(&params);
-  params.initial_max_streams_uni = 1;
-  params.initial_max_data = 100;
-
-  opts = (conn_options){
-    .params = &params,
-  };
-
-  setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
-
-  fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
-    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .stream_id = 2,
-    .max_stream_data =
-      conn->local.transport_params.initial_max_stream_data_uni + 1,
-  };
-
-  dwnx_buf_reset(&buf);
-  dwnx_write_record(&buf, fr, 1);
-
-  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
-
-  assert_int(DWNX_ERR_FLOW_CONTROL, ==, rv);
-
-  dwnx_conn_del(conn);
-
-  /* Receiving STREAM_DATA_BLOCKED against the remote bidirectional
-     stream and offset violates connection level flow control
-     limit. */
-  dwnx_transport_params_default(&params);
-  params.initial_max_streams_bidi = 1;
-  params.initial_max_stream_data_bidi_remote = 100;
-
-  opts = (conn_options){
-    .params = &params,
-  };
-
-  setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
-
-  fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
-    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .max_stream_data = conn->local.transport_params.initial_max_data + 1,
-  };
-
-  dwnx_buf_reset(&buf);
-  dwnx_write_record(&buf, fr, 1);
-
-  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
-
-  assert_int(DWNX_ERR_FLOW_CONTROL, ==, rv);
 
   dwnx_conn_del(conn);
 
@@ -3729,7 +3733,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   dwnx_conn_del(conn);
 
   /* Receiving STREAM_DATA_BLOCKED against the remote bidirectional
-     stream and offset is smaller than the last offset. */
+     stream and max_stream_data is smaller than the last offset. */
   dwnx_transport_params_default(&params);
   params.initial_max_streams_bidi = 1;
   params.initial_max_stream_data_bidi_remote = 100;
@@ -3771,12 +3775,11 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   dwnx_conn_del(conn);
 
-  /* Receiving STREAM_DATA_BLOCKED against the remote bidirectional
-     stream and offset violates stream level flow control limit. */
+  /* Receive 1 byte at a time */
   dwnx_transport_params_default(&params);
-  params.initial_max_streams_bidi = 1;
-  params.initial_max_stream_data_bidi_remote = 99;
+  params.initial_max_streams_bidi = DWNX_MAX_STREAMS;
   params.initial_max_data = 100;
+  params.initial_max_stream_data_bidi_remote = 100;
 
   opts = (conn_options){
     .params = &params,
@@ -3787,7 +3790,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream = (dwnx_frame_stream){
     .type = DWNX_FRAME_STREAM,
-    .flags = DWNX_STREAM_LEN_BIT,
+    .stream_id = (DWNX_MAX_STREAMS - 1) << 2,
     .len =
       (size_t)conn->local.transport_params.initial_max_stream_data_bidi_remote,
   };
@@ -3801,80 +3804,9 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .max_stream_data =
-      conn->local.transport_params.initial_max_stream_data_bidi_remote + 1,
-  };
-
-  dwnx_buf_reset(&buf);
-  dwnx_write_record(&buf, fr, 1);
-
-  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
-
-  assert_int(DWNX_ERR_FLOW_CONTROL, ==, rv);
-
-  dwnx_conn_del(conn);
-
-  /* Receiving STREAM_DATA_BLOCKED against the remote bidirectional
-     stream and offset violates connection level flow control limit. */
-  dwnx_transport_params_default(&params);
-  params.initial_max_streams_bidi = 1;
-  params.initial_max_stream_data_bidi_remote = 100;
-  params.initial_max_data = 99;
-
-  opts = (conn_options){
-    .params = &params,
-  };
-
-  setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
-
-  fr[0].stream = (dwnx_frame_stream){
-    .type = DWNX_FRAME_STREAM,
-    .flags = DWNX_STREAM_LEN_BIT,
-    .len = (size_t)(conn->local.transport_params
-                      .initial_max_stream_data_bidi_remote -
-                    1),
-  };
-
-  dwnx_buf_reset(&buf);
-  dwnx_write_record(&buf, fr, 1);
-
-  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
-
-  assert_int(0, ==, rv);
-
-  fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
-    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
+    .stream_id = (DWNX_MAX_STREAMS - 1) << 2,
     .max_stream_data =
       conn->local.transport_params.initial_max_stream_data_bidi_remote,
-  };
-
-  dwnx_buf_reset(&buf);
-  dwnx_write_record(&buf, fr, 1);
-
-  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
-
-  assert_int(DWNX_ERR_FLOW_CONTROL, ==, rv);
-
-  dwnx_conn_del(conn);
-
-  /* Receive 1 byte at a time */
-  dwnx_transport_params_default(&params);
-  params.initial_max_streams_bidi = DWNX_MAX_STREAMS;
-  params.initial_max_data = 1000000007;
-  params.initial_max_stream_data_bidi_remote = 1000000007;
-
-  opts = (conn_options){
-    .params = &params,
-  };
-
-  setup_default_server_with_options(&conn, opts);
-  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
-
-  fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
-    .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .stream_id = (DWNX_MAX_STREAMS - 1) << 2,
-    .max_stream_data = 1000000007,
   };
 
   dwnx_buf_reset(&buf);
