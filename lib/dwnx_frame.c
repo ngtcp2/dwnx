@@ -314,7 +314,7 @@ dwnx_ssize dwnx_frame_encode_max_streams(uint8_t *out, size_t outlen,
 
 dwnx_ssize dwnx_frame_encode_data_blocked(uint8_t *out, size_t outlen,
                                           const dwnx_frame_data_blocked *fr) {
-  size_t len = 1 + dwnx_put_uvarintlen(fr->offset);
+  size_t len = 1 + dwnx_put_uvarintlen(fr->max_data);
   uint8_t *p;
 
   if (outlen < len) {
@@ -324,7 +324,7 @@ dwnx_ssize dwnx_frame_encode_data_blocked(uint8_t *out, size_t outlen,
   p = out;
 
   *p++ = DWNX_FRAME_DATA_BLOCKED;
-  p = dwnx_put_uvarint(p, fr->offset);
+  p = dwnx_put_uvarint(p, fr->max_data);
 
   assert((size_t)(p - out) == len);
 
@@ -334,7 +334,7 @@ dwnx_ssize dwnx_frame_encode_data_blocked(uint8_t *out, size_t outlen,
 dwnx_ssize dwnx_frame_encode_stream_data_blocked(
   uint8_t *out, size_t outlen, const dwnx_frame_stream_data_blocked *fr) {
   size_t len = 1 + dwnx_put_uvarintlen((uint64_t)fr->stream_id) +
-               dwnx_put_uvarintlen(fr->offset);
+               dwnx_put_uvarintlen(fr->max_stream_data);
   uint8_t *p;
 
   if (outlen < len) {
@@ -345,7 +345,7 @@ dwnx_ssize dwnx_frame_encode_stream_data_blocked(
 
   *p++ = DWNX_FRAME_STREAM_DATA_BLOCKED;
   p = dwnx_put_uvarint(p, (uint64_t)fr->stream_id);
-  p = dwnx_put_uvarint(p, fr->offset);
+  p = dwnx_put_uvarint(p, fr->max_stream_data);
 
   assert((size_t)(p - out) == len);
 
@@ -924,7 +924,7 @@ dwnx_ssize dwnx_frame_decode_data_blocked(dwnx_frame_data_blocked *dest,
   }
 
   dest->type = DWNX_FRAME_DATA_BLOCKED;
-  p = dwnx_get_uvarint(&dest->offset, p);
+  p = dwnx_get_uvarint(&dest->max_data, p);
 
   assert((size_t)(p - payload) == len);
 
@@ -965,7 +965,7 @@ dwnx_frame_decode_stream_data_blocked(dwnx_frame_stream_data_blocked *dest,
 
   dest->type = DWNX_FRAME_STREAM_DATA_BLOCKED;
   p = dwnx_get_varint(&dest->stream_id, p);
-  p = dwnx_get_uvarint(&dest->offset, p);
+  p = dwnx_get_uvarint(&dest->max_stream_data, p);
 
   assert((size_t)(p - payload) == len);
 

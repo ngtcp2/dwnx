@@ -3282,7 +3282,7 @@ void test_dwnx_conn_recv_data_blocked(void) {
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = conn->rx.max_offset,
+    .max_data = conn->rx.max_offset,
   };
 
   dwnx_write_record(&buf, &fr, 1);
@@ -3303,7 +3303,7 @@ void test_dwnx_conn_recv_data_blocked(void) {
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = conn->rx.max_offset + 1,
+    .max_data = conn->rx.max_offset + 1,
   };
 
   dwnx_buf_reset(&buf);
@@ -3321,7 +3321,7 @@ void test_dwnx_conn_recv_data_blocked(void) {
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = conn->rx.max_offset,
+    .max_data = conn->rx.max_offset,
   };
 
   dwnx_buf_reset(&buf);
@@ -3349,7 +3349,7 @@ void test_dwnx_conn_recv_data_blocked(void) {
 
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = DWNX_MAX_VARINT,
+    .max_data = DWNX_MAX_VARINT,
   };
 
   dwnx_buf_reset(&buf);
@@ -3393,7 +3393,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = 4,
-    .offset = 64 * 1024,
+    .max_stream_data = 64 * 1024,
   };
 
   dwnx_write_record(&buf, fr, 1);
@@ -3426,7 +3426,8 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = stream_id,
-    .offset = conn->local.transport_params.initial_max_stream_data_bidi_local,
+    .max_stream_data =
+      conn->local.transport_params.initial_max_stream_data_bidi_local,
   };
 
   dwnx_buf_reset(&buf);
@@ -3446,7 +3447,8 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = 1,
-    .offset = conn->local.transport_params.initial_max_stream_data_bidi_local,
+    .max_stream_data =
+      conn->local.transport_params.initial_max_stream_data_bidi_local,
   };
 
   dwnx_buf_reset(&buf);
@@ -3467,7 +3469,8 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = dwnx_nth_remote_bidi_stream_id(
       conn, conn->local.transport_params.initial_max_streams_bidi + 1),
-    .offset = conn->local.transport_params.initial_max_stream_data_bidi_remote,
+    .max_stream_data =
+      conn->local.transport_params.initial_max_stream_data_bidi_remote,
   };
 
   dwnx_buf_reset(&buf);
@@ -3507,7 +3510,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = dwnx_nth_remote_uni_stream_id(
       conn, conn->local.transport_params.initial_max_streams_uni + 1),
-    .offset = conn->local.transport_params.initial_max_stream_data_uni,
+    .max_stream_data = conn->local.transport_params.initial_max_stream_data_uni,
   };
 
   dwnx_buf_reset(&buf);
@@ -3543,7 +3546,8 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[1].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = stream_id,
-    .offset = conn->local.transport_params.initial_max_stream_data_bidi_local,
+    .max_stream_data =
+      conn->local.transport_params.initial_max_stream_data_bidi_local,
   };
 
   dwnx_buf_reset(&buf);
@@ -3587,7 +3591,8 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .offset = conn->local.transport_params.initial_max_stream_data_bidi_remote,
+    .max_stream_data =
+      conn->local.transport_params.initial_max_stream_data_bidi_remote,
   };
 
   dwnx_buf_reset(&buf);
@@ -3614,7 +3619,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .offset =
+    .max_stream_data =
       conn->local.transport_params.initial_max_stream_data_bidi_remote + 1,
   };
 
@@ -3643,7 +3648,8 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = 2,
-    .offset = conn->local.transport_params.initial_max_stream_data_uni + 1,
+    .max_stream_data =
+      conn->local.transport_params.initial_max_stream_data_uni + 1,
   };
 
   dwnx_buf_reset(&buf);
@@ -3671,7 +3677,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .offset = conn->local.transport_params.initial_max_data + 1,
+    .max_stream_data = conn->local.transport_params.initial_max_data + 1,
   };
 
   dwnx_buf_reset(&buf);
@@ -3709,7 +3715,8 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .offset = conn->local.transport_params.initial_max_stream_data_bidi_remote,
+    .max_stream_data =
+      conn->local.transport_params.initial_max_stream_data_bidi_remote,
   };
 
   dwnx_buf_reset(&buf);
@@ -3751,7 +3758,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .offset =
+    .max_stream_data =
       conn->local.transport_params.initial_max_stream_data_bidi_remote - 1,
   };
 
@@ -3794,7 +3801,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .offset =
+    .max_stream_data =
       conn->local.transport_params.initial_max_stream_data_bidi_remote + 1,
   };
 
@@ -3838,7 +3845,8 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
-    .offset = conn->local.transport_params.initial_max_stream_data_bidi_remote,
+    .max_stream_data =
+      conn->local.transport_params.initial_max_stream_data_bidi_remote,
   };
 
   dwnx_buf_reset(&buf);
@@ -3866,7 +3874,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = (DWNX_MAX_STREAMS - 1) << 2,
-    .offset = 1000000007,
+    .max_stream_data = 1000000007,
   };
 
   dwnx_buf_reset(&buf);
@@ -3897,7 +3905,7 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = (DWNX_MAX_STREAMS - 1) << 2,
-    .offset = 1000000007,
+    .max_stream_data = 1000000007,
   };
 
   dwnx_buf_reset(&buf);
@@ -5011,7 +5019,7 @@ void test_dwnx_conn_writev_stream(void) {
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
-  assert_uint64(16339 + 8237, ==, fr.stream_data_blocked.offset);
+  assert_uint64(16339 + 8237, ==, fr.stream_data_blocked.max_stream_data);
 
   dwnx_conn_del(conn);
 
@@ -5235,7 +5243,7 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
 
   assert_int(0, ==, rv);
   assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
-  assert_uint64(0, ==, fr.data_blocked.offset);
+  assert_uint64(0, ==, fr.data_blocked.max_data);
 
   rv = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
@@ -5243,7 +5251,7 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
-  assert_uint64(0, ==, fr.stream_data_blocked.offset);
+  assert_uint64(0, ==, fr.stream_data_blocked.max_stream_data);
 
   strm = dwnx_conn_find_stream(conn, stream_id);
 
@@ -5294,7 +5302,7 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
 
   assert_int(0, ==, rv);
   assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
-  assert_uint64(77, ==, fr.data_blocked.offset);
+  assert_uint64(77, ==, fr.data_blocked.max_data);
 
   rv = dwnx_frd_decode_buf(&frd, &fr, &buf);
 
@@ -5302,7 +5310,7 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
-  assert_uint64(77, ==, fr.stream_data_blocked.offset);
+  assert_uint64(77, ==, fr.stream_data_blocked.max_stream_data);
 
   strm = dwnx_conn_find_stream(conn, stream_id);
 
@@ -5381,7 +5389,7 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
-  assert_uint64(77, ==, fr.stream_data_blocked.offset);
+  assert_uint64(77, ==, fr.stream_data_blocked.max_stream_data);
 
   dwnx_conn_del(conn);
 
@@ -5426,7 +5434,7 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_int(0, ==, rv);
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_DATA_BLOCKED, ==, fr.hd.type);
-  assert_uint64(77, ==, fr.data_blocked.offset);
+  assert_uint64(77, ==, fr.data_blocked.max_data);
 
   strm = dwnx_conn_find_stream(conn, stream_id);
 
@@ -5452,7 +5460,7 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_STREAM_DATA_BLOCKED, ==, fr.hd.type);
   assert_int64(stream_id, ==, fr.stream_data_blocked.stream_id);
-  assert_uint64(77, ==, fr.stream_data_blocked.offset);
+  assert_uint64(77, ==, fr.stream_data_blocked.max_stream_data);
 
   strm = dwnx_conn_find_stream(conn, stream_id);
 

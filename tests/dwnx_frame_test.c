@@ -557,7 +557,7 @@ void test_dwnx_frame_encode_data_blocked(void) {
 
   fr = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = DWNX_MAX_VARINT,
+    .max_data = DWNX_MAX_VARINT,
   };
 
   rv = dwnx_frame_encode_data_blocked(buf, sizeof(buf), &fr);
@@ -568,7 +568,7 @@ void test_dwnx_frame_encode_data_blocked(void) {
 
   assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
   assert_uint64(fr.type, ==, nfr.type);
-  assert_uint64(fr.offset, ==, nfr.offset);
+  assert_uint64(fr.max_data, ==, nfr.max_data);
 
   for (i = 0; i < framelen; ++i) {
     nread = dwnx_frame_decode_data_blocked(&nfr, buf, i);
@@ -591,7 +591,7 @@ void test_dwnx_frame_encode_stream_data_blocked(void) {
   fr = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = (int64_t)(DWNX_MAX_VARINT >> 1),
-    .offset = DWNX_MAX_VARINT,
+    .max_stream_data = DWNX_MAX_VARINT,
   };
 
   rv = dwnx_frame_encode_stream_data_blocked(buf, sizeof(buf), &fr);
@@ -603,7 +603,7 @@ void test_dwnx_frame_encode_stream_data_blocked(void) {
   assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
   assert_uint64(fr.type, ==, nfr.type);
   assert_int64(fr.stream_id, ==, nfr.stream_id);
-  assert_uint64(fr.offset, ==, nfr.offset);
+  assert_uint64(fr.max_stream_data, ==, nfr.max_stream_data);
 
   for (i = 0; i < framelen; ++i) {
     nread = dwnx_frame_decode_stream_data_blocked(&nfr, buf, i);
@@ -1097,7 +1097,7 @@ void test_dwnx_frd_decode(void) {
   /* DATA_BLOCKED */
   fr.data_blocked = (dwnx_frame_data_blocked){
     .type = DWNX_FRAME_DATA_BLOCKED,
-    .offset = DWNX_MAX_VARINT,
+    .max_data = DWNX_MAX_VARINT,
   };
 
   dwnx_buf_reset(&buf);
@@ -1115,7 +1115,7 @@ void test_dwnx_frd_decode(void) {
   fr.stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
     .stream_id = DWNX_MAX_VARINT,
-    .offset = DWNX_MAX_VARINT,
+    .max_stream_data = DWNX_MAX_VARINT,
   };
 
   dwnx_buf_reset(&buf);

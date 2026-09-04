@@ -116,14 +116,15 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
     return;
   case DWNX_FRAME_DATA_BLOCKED:
     dest->last = dwnx_put_uvarint(dest->last, fr->data_blocked.type);
-    dest->last = dwnx_put_uvarint(dest->last, fr->data_blocked.offset);
+    dest->last = dwnx_put_uvarint(dest->last, fr->data_blocked.max_data);
 
     return;
   case DWNX_FRAME_STREAM_DATA_BLOCKED:
     dest->last = dwnx_put_uvarint(dest->last, fr->stream_data_blocked.type);
     dest->last =
       dwnx_put_uvarint(dest->last, (uint64_t)fr->stream_data_blocked.stream_id);
-    dest->last = dwnx_put_uvarint(dest->last, fr->stream_data_blocked.offset);
+    dest->last =
+      dwnx_put_uvarint(dest->last, fr->stream_data_blocked.max_stream_data);
 
     return;
   case DWNX_FRAME_STREAMS_BLOCKED_BIDI:

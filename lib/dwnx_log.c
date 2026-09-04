@@ -209,7 +209,7 @@ static void log_fr_data_blocked(dwnx_log *log,
                                 const dwnx_frame_data_blocked *fr,
                                 const char *dir) {
   dwnx_log_infof_raw(log, DWNX_LOG_EVENT_FRM, dir, " DATA_BLOCKED(0x",
-                     hex(fr->type), ") offset=", fr->offset);
+                     hex(fr->type), ") max_data=", fr->max_data);
 }
 
 static void log_fr_stream_data_blocked(dwnx_log *log,
@@ -217,7 +217,7 @@ static void log_fr_stream_data_blocked(dwnx_log *log,
                                        const char *dir) {
   dwnx_log_infof_raw(log, DWNX_LOG_EVENT_FRM, dir, " STREAM_DATA_BLOCKED(0x",
                      hex(fr->type), ") id=0x", hex(fr->stream_id),
-                     " offset=", fr->offset);
+                     " max_stream_data=", fr->max_stream_data);
 }
 
 static void log_fr_streams_blocked(dwnx_log *log,
