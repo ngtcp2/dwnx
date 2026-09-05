@@ -128,6 +128,15 @@ int extend_max_streams(dwnx_conn *conn, uint64_t max_streams, void *user_data) {
 } // namespace
 
 namespace {
+int write_stream_data_offset(dwnx_conn *conn, int64_t stream_id,
+                             uint64_t offset, size_t len, void *user_data) {
+  auto fdp = static_cast<FuzzedDataProvider *>(user_data);
+
+  return fdp->ConsumeBool() ? DWNX_ERR_CALLBACK_FAILURE : 0;
+}
+} // namespace
+
+namespace {
 dwnx_conn *setup_conn(FuzzedDataProvider &fdp, const dwnx_mem &mem) {
   static constexpr dwnx_callbacks callbacks{
     .rand = rand,
@@ -143,6 +152,7 @@ dwnx_conn *setup_conn(FuzzedDataProvider &fdp, const dwnx_mem &mem) {
     .extend_max_local_streams_uni = extend_max_streams,
     .extend_max_remote_streams_bidi = extend_max_streams,
     .extend_max_remote_streams_uni = extend_max_streams,
+    .write_stream_data_offset = write_stream_data_offset,
   };
 
   dwnx_settings settings;
