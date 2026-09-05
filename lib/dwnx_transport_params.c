@@ -294,11 +294,15 @@ int dwnx_transport_params_decode(dwnx_transport_params *dest,
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
 
+      /* Because we multiply the value by DWNX_MILLISECONDS, the
+         maximum value for max_idle_timeout is 18446744073709ms ~=
+         213504 days.  If it is larger than that, it is truncated. */
       if (dest->max_idle_timeout > UINT64_MAX / DWNX_MILLISECONDS) {
-        dest->max_idle_timeout = UINT64_MAX;
+        dest->max_idle_timeout =
+          UINT64_MAX / DWNX_MILLISECONDS * DWNX_MILLISECONDS;
+      } else {
+        dest->max_idle_timeout *= DWNX_MILLISECONDS;
       }
-
-      dest->max_idle_timeout *= DWNX_MILLISECONDS;
 
       break;
     case DWNX_TRANSPORT_PARAM_MAX_RECORD_SIZE:
