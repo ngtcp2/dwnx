@@ -28,6 +28,8 @@
 
 #include "dwnx_transport_params.h"
 #include "dwnx_conv.h"
+#include "dwnx_str.h"
+#include "dwnx_macro.h"
 #include "dwnx_test_helper.h"
 
 static const MunitTest tests[] = {
@@ -120,8 +122,26 @@ void test_dwnx_transport_params_encode(void) {
 }
 
 void test_dwnx_transport_params_decode(void) {
-  dwnx_transport_params params;
+  static const uint64_t prohibited_params[] = {
+    DWNX_TRANSPORT_PARAM_ORIGINAL_DESTINATION_CONNECTION_ID,
+    DWNX_TRANSPORT_PARAM_STATELESS_RESET_TOKEN,
+    DWNX_TRANSPORT_PARAM_MAX_UDP_PAYLOAD_SIZE,
+    DWNX_TRANSPORT_PARAM_ACK_DELAY_EXPONENT,
+    DWNX_TRANSPORT_PARAM_MAX_ACK_DELAY,
+    DWNX_TRANSPORT_PARAM_DISABLE_ACTIVE_MIGRATION,
+    DWNX_TRANSPORT_PARAM_PREFERRED_ADDRESS,
+    DWNX_TRANSPORT_PARAM_ACTIVE_CONNECTION_ID_LIMIT,
+    DWNX_TRANSPORT_PARAM_INITIAL_SOURCE_CONNECTION_ID,
+    DWNX_TRANSPORT_PARAM_RETRY_SOURCE_CONNECTION_ID,
+  };
+  dwnx_transport_params params, src;
+  uint8_t rawbuf[1024];
+  dwnx_buf buf;
+  dwnx_ssize nwrite;
+  size_t i;
   int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
 
   /* Decode from 0 length data */
   rv = dwnx_transport_params_decode(&params, NULL, 0);
@@ -135,4 +155,152 @@ void test_dwnx_transport_params_decode(void) {
   assert_uint64(0, ==, params.initial_max_streams_uni);
   assert_uint64(0, ==, params.max_idle_timeout);
   assert_uint64(DWNX_DEFAULT_MAX_RECORD_SIZE, ==, params.max_record_size);
+
+  /* Transport parameter is prematurely truncated inside type */
+  dwnx_buf_reset(&buf);
+
+  buf.last = dwnx_put_uvarint(buf.last, DWNX_MAX_VARINT);
+  --buf.last;
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+
+  /* initial_max_streams_bidi is larger than DWNX_MAX_STREAMS */
+  dwnx_transport_params_default(&src);
+  src.initial_max_streams_bidi = DWNX_MAX_STREAMS + 1;
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_transport_params_encode(buf.last, dwnx_buf_left(&buf), &src);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  buf.last += nwrite;
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+
+  /* initial_max_streams_uni is larger than or DWNX_MAX_STREAMS */
+  dwnx_transport_params_default(&src);
+  src.initial_max_streams_uni = DWNX_MAX_STREAMS + 1;
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_transport_params_encode(buf.last, dwnx_buf_left(&buf), &src);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  buf.last += nwrite;
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+
+  /* maximum max_idle_timeout */
+  dwnx_transport_params_default(&src);
+  src.max_idle_timeout = 18446744073709 * DWNX_MILLISECONDS;
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_transport_params_encode(buf.last, dwnx_buf_left(&buf), &src);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  buf.last += nwrite;
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(0, ==, rv);
+  assert_uint64(18446744073709 * DWNX_MILLISECONDS, ==,
+                params.max_idle_timeout);
+
+  /* max_idle_timeout is too large, overflows uint64_t when multiplied
+     by DWNX_MILLISECONDS. */
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, DWNX_TRANSPORT_PARAM_MAX_IDLE_TIMEOUT);
+  buf.last = dwnx_put_uvarint(buf.last, dwnx_put_uvarintlen(18446744073710));
+  buf.last = dwnx_put_uvarint(buf.last, 18446744073710);
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(0, ==, rv);
+  assert_uint64(18446744073709 * DWNX_MILLISECONDS, ==,
+                params.max_idle_timeout);
+
+  /* Ignore unknown transport parameters */
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, 0xDEADBEEF);
+  buf.last = dwnx_put_uvarint(buf.last, 100);
+  buf.last = dwnx_setmem(buf.last, 0, 100);
+  buf.last = dwnx_put_uvarint(buf.last, 0xCACECAFE);
+  buf.last = dwnx_put_uvarint(buf.last, 0);
+  buf.last = dwnx_put_uvarint(buf.last, DWNX_TRANSPORT_PARAM_INITIAL_MAX_DATA);
+  buf.last = dwnx_put_uvarint(buf.last, dwnx_put_uvarintlen(1000000007));
+  buf.last = dwnx_put_uvarint(buf.last, 1000000007);
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(0, ==, rv);
+  assert_uint64(1000000007, ==, params.initial_max_data);
+
+  /* Prematurely truncated unknown transport parameter value length */
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, 0xDEADBEEF);
+  dwnx_put_uvarint(buf.last, 100);
+  ++buf.last;
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+
+  /* The value of unknown transport parameter is truncated */
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, 0xDEADBEEF);
+  buf.last = dwnx_put_uvarint(buf.last, 78);
+  buf.last = dwnx_setmem(buf.last, 0, 77);
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+
+  /* The length of transport parameter value is missing */
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, 0xDEADBEEF);
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+
+  /* The value length of max_data does not match the encoded
+     integer */
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, DWNX_TRANSPORT_PARAM_INITIAL_MAX_DATA);
+  buf.last = dwnx_put_uvarint(buf.last, 2);
+  buf.last = dwnx_put_uvarint(buf.last, 63);
+  *buf.last++ = 0;
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+
+  /* Prematurely truncated length of Connection ID parameter */
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(
+    buf.last, DWNX_TRANSPORT_PARAM_ORIGINAL_DESTINATION_CONNECTION_ID);
+  dwnx_put_uvarint(buf.last, 100);
+  ++buf.last;
+
+  rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+  assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+
+  /* prohibited transport parameters */
+  for (i = 0; i < dwnx_arraylen(prohibited_params); ++i) {
+    dwnx_buf_reset(&buf);
+    buf.last = dwnx_put_uvarint(buf.last, prohibited_params[i]);
+    *buf.last++ = 0;
+
+    rv = dwnx_transport_params_decode(&params, buf.pos, dwnx_buf_len(&buf));
+
+    assert_int(DWNX_ERR_MALFORMED_TRANSPORT_PARAM, ==, rv);
+  }
 }
