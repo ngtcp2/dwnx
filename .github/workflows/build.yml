@@ -10,7 +10,6 @@ concurrency:
 
 env:
   AWSLC_VERSION: v5.4.0
-  OSSL_VERSION: 4.0.1
   NGHTTP3_VERSION: head
 
 jobs:
@@ -57,12 +56,6 @@ jobs:
       with:
         path: aws-lc/build
         key: ${{ matrix.os }}-awslc-${{ env.AWSLC_VERSION }}
-    - name: Restore OSSL cache
-      id: cache-ossl
-      uses: actions/cache@v6
-      with:
-        path: ossl/build
-        key: ${{ matrix.os }}-ossl-${{ env.OSSL_VERSION }}
     - name: Restore nghttp3 cache
       id: cache-nghttp3
       uses: actions/cache@v6
@@ -71,7 +64,6 @@ jobs:
         key: ${{ matrix.os }}-nghttp3-${{ needs.setup.outputs.nghttp3-version }}
     - id: settings
       if: |
-        steps.cache-ossl.outputs.cache-hit != 'true' ||
         steps.cache-awslc.outputs.cache-hit != 'true' ||
         steps.cache-nghttp3.outputs.cache-hit != 'true'
       run: |
@@ -103,10 +95,6 @@ jobs:
       if: steps.cache-awslc.outputs.cache-hit != 'true'
       run: |
         ./ci/build_aws-lc.sh
-    - name: Build OSSL
-      if: steps.cache-ossl.outputs.cache-hit != 'true'
-      run: |
-        ./ci/build_openssl.sh
     - name: Build nghttp3
       if: steps.cache-nghttp3.outputs.cache-hit != 'true'
       run: |
@@ -159,7 +147,8 @@ jobs:
           autotools-dev \
           libtool \
           pkg-config \
-          libev-dev
+          libev-dev \
+          libssl-dev
 
         asanflags="-fsanitize=address,undefined -fno-sanitize-recover=undefined"
 
@@ -211,13 +200,6 @@ jobs:
         path: aws-lc/build
         key: ${{ matrix.os }}-awslc-${{ env.AWSLC_VERSION }}
         fail-on-cache-miss: true
-    - name: Restore OSSL cache
-      uses: actions/cache/restore@v6
-      if: matrix.tls == 'ossl'
-      with:
-        path: ossl/build
-        key: ${{ matrix.os }}-ossl-${{ env.OSSL_VERSION }}
-        fail-on-cache-miss: true
     - name: Restore nghttp3 cache
       uses: actions/cache/restore@v6
       with:
@@ -241,7 +223,6 @@ jobs:
           PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$PWD/aws-lc/build/lib/pkgconfig"
           ;;
         "ossl")
-          PKG_CONFIG_PATH="$PKG_CONFIG_PATH:$PWD/ossl/build/lib64/pkgconfig"
           ;;
         *)
           echo "unsupported TLS library: ${{ matrix.tls }}"
