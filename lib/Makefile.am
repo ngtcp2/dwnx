@@ -51,6 +51,7 @@ OBJECTS = \
 	dwnx_pq.c \
 	dwnx_qre.c \
 	dwnx_range.c \
+	dwnx_ratelim.c \
 	dwnx_record_reader.c \
 	dwnx_settings.c \
 	dwnx_str.c \
@@ -80,6 +81,7 @@ HFILES = \
 	dwnx_pq.h \
 	dwnx_qre.h \
 	dwnx_range.h \
+	dwnx_ratelim.h \
 	dwnx_record_reader.h \
 	dwnx_settings.h \
 	dwnx_str.h \

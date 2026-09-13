@@ -22,8 +22,8 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-#ifndef DWNX_SETTINGS_H
-#define DWNX_SETTINGS_H
+#ifndef DWNX_RATELIM_H
+#define DWNX_RATELIM_H
 
 #ifdef HAVE_CONFIG_H
 #  include <config.h>
@@ -31,11 +31,31 @@
 
 #include <dwnx/dwnx.h>
 
-/* DWNX_DEFAULT_GLITCH_RATELIM_BURST is the maximum number of tokens
-   in glitch rate limiter.  It is also the initial value. */
-#define DWNX_DEFAULT_GLITCH_RATELIM_BURST 10000
-/* DWNX_DEFAULT_GLITCH_RATELIM_RATE is the rate of tokens generated
-   per second for glitch rate limiter. */
-#define DWNX_DEFAULT_GLITCH_RATELIM_RATE 330
+/* DWNX_RATELIM_MAX_BURST is the maximum value of the burst. */
+#define DWNX_RATELIM_MAX_BURST (UINT64_MAX / DWNX_SECONDS)
 
-#endif /* !defined(DWNX_SETTINGS_H) */
+typedef struct dwnx_ratelim {
+  /* burst is the maximum number of tokens. */
+  uint64_t burst;
+  /* rate is the rate of token generation measured by token /
+     second. */
+  uint64_t rate;
+  /* tokens is the amount of tokens available to drain. */
+  uint64_t tokens;
+  /* carry is the partial token gained in sub-second period.  It is
+     added to the computation in the next update round. */
+  uint64_t carry;
+  /* ts is the last timestamp that is known to this object. */
+  dwnx_tstamp ts;
+} dwnx_ratelim;
+
+/* dwnx_ratelim_init initializes |rlim| with the given parameters.
+   |burst| is clamped to DWNX_RATELIM_MAX_BURST. */
+void dwnx_ratelim_init(dwnx_ratelim *rlim, uint64_t burst, uint64_t rate,
+                       dwnx_tstamp ts);
+
+/* dwnx_ratelim_drain drains |n| from rlim->tokens.  It returns 0 if
+   it succeeds, or -1. */
+int dwnx_ratelim_drain(dwnx_ratelim *rlim, uint64_t n, dwnx_tstamp ts);
+
+#endif /* !defined(DWNX_RATELIM_H) */

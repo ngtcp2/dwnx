@@ -349,6 +349,8 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   params = &conn->local.transport_params;
 
   dwnx_transport_params_default(&conn->remote.transport_params);
+  dwnx_ratelim_init(&conn->glitch_rlim, settings->glitch_ratelim_burst,
+                    settings->glitch_ratelim_rate, settings->initial_ts);
 
   conn->user_data = user_data;
   conn->idle_ts = settings->initial_ts;
@@ -700,7 +702,7 @@ static int conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
 
 static int conn_recv_qx_ping(dwnx_conn *conn, const dwnx_frame_qx_ping *fr,
                              dwnx_tstamp ts) {
-  (void)ts;
+  int rv;
 
   if (fr->type == DWNX_FRAME_QX_PING_RESPONSE) {
     if (conn->tx.ping.last_seq < (int64_t)fr->seq) {
@@ -712,6 +714,11 @@ static int conn_recv_qx_ping(dwnx_conn *conn, const dwnx_frame_qx_ping *fr,
 
   if (conn->rx.ping.last_seq >= (int64_t)fr->seq) {
     return DWNX_ERR_PROTO;
+  }
+
+  rv = dwnx_ratelim_drain(&conn->glitch_rlim, 1, ts);
+  if (rv != 0) {
+    return DWNX_ERR_INTERNAL;
   }
 
   conn->rx.ping.last_seq = (int64_t)fr->seq;
@@ -937,7 +944,6 @@ static int conn_recv_stop_sending(dwnx_conn *conn,
   dwnx_idtr *idtr;
   int local_stream = conn_local_stream(conn, fr->stream_id);
   int bidi = bidi_stream(fr->stream_id);
-  (void)ts;
 
   if (bidi) {
     if (local_stream) {
@@ -960,6 +966,11 @@ static int conn_recv_stop_sending(dwnx_conn *conn,
   strm = dwnx_conn_find_stream(conn, fr->stream_id);
   if (!strm) {
     if (local_stream) {
+      rv = dwnx_ratelim_drain(&conn->glitch_rlim, 1, ts);
+      if (rv != 0) {
+        return DWNX_ERR_INTERNAL;
+      }
+
       return 0;
     }
     rv = dwnx_idtr_open(idtr, fr->stream_id);
@@ -969,6 +980,11 @@ static int conn_recv_stop_sending(dwnx_conn *conn,
       }
 
       assert(rv == DWNX_ERR_STREAM_IN_USE);
+
+      rv = dwnx_ratelim_drain(&conn->glitch_rlim, 1, ts);
+      if (rv != 0) {
+        return DWNX_ERR_INTERNAL;
+      }
 
       return 0;
     }
@@ -987,6 +1003,11 @@ static int conn_recv_stop_sending(dwnx_conn *conn,
   }
 
   if (strm->flags & DWNX_STRM_FLAG_STOP_SENDING_RECVED) {
+    rv = dwnx_ratelim_drain(&conn->glitch_rlim, 1, ts);
+    if (rv != 0) {
+      return DWNX_ERR_INTERNAL;
+    }
+
     return 0;
   }
 
@@ -1036,7 +1057,6 @@ static int conn_recv_max_stream_data(dwnx_conn *conn,
   int local_stream = conn_local_stream(conn, fr->stream_id);
   int bidi = bidi_stream(fr->stream_id);
   int rv;
-  (void)ts;
 
   if (bidi) {
     if (local_stream) {
@@ -1060,6 +1080,11 @@ static int conn_recv_max_stream_data(dwnx_conn *conn,
   if (!strm) {
     if (local_stream) {
       /* Stream has been closed. */
+      rv = dwnx_ratelim_drain(&conn->glitch_rlim, 1, ts);
+      if (rv != 0) {
+        return DWNX_ERR_INTERNAL;
+      }
+
       return 0;
     }
 
@@ -1070,6 +1095,11 @@ static int conn_recv_max_stream_data(dwnx_conn *conn,
       }
 
       assert(rv == DWNX_ERR_STREAM_IN_USE);
+
+      rv = dwnx_ratelim_drain(&conn->glitch_rlim, 1, ts);
+      if (rv != 0) {
+        return DWNX_ERR_INTERNAL;
+      }
 
       return 0;
     }
@@ -1093,6 +1123,11 @@ static int conn_recv_max_stream_data(dwnx_conn *conn,
 
   /* Don't call callback if stream is half-closed local */
   if (strm->flags & DWNX_STRM_FLAG_SHUT_WR) {
+    rv = dwnx_ratelim_drain(&conn->glitch_rlim, 1, ts);
+    if (rv != 0) {
+      return DWNX_ERR_INTERNAL;
+    }
+
     return 0;
   }
 
