@@ -37,6 +37,7 @@
 #include "dwnx_pq.h"
 #include "dwnx_qre.h"
 #include "dwnx_log.h"
+#include "dwnx_ratelim.h"
 
 #define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SEEN 0x01U
 #define DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SENT 0x02U
@@ -169,6 +170,7 @@ struct dwnx_conn {
 
   dwnx_settings settings;
   dwnx_callbacks callbacks;
+  dwnx_ratelim glitch_rlim;
   dwnx_map strms;
   dwnx_log log;
   dwnx_tstamp idle_ts;

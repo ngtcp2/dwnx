@@ -681,13 +681,35 @@ typedef struct dwnx_settings {
    * message is emitted.  If this field is NULL, logging is disabled.
    */
   dwnx_log_write log_write;
+  /**
+   * :member:`glitch_ratelim_burst` is the maximum number of tokens
+   * available to "glitch" rate limiter.  It is clamped to UINT64_MAX
+   * / DWNX_SECONDS.  "glitch" is a suspicious activity from a remote
+   * endpoint.  If detected, certain amount of tokens are consumed.
+   * If no tokens are available to consume, the connection is closed.
+   * The rate of token generation is specified by
+   * :member:`glitch_ratelim_rate`.
+   */
+  uint64_t glitch_ratelim_burst;
+  /**
+   * :member:`glitch_ratelim_rate` is the number of tokens generated
+   * per second.  See :member:`glitch_ratelim_burst` for "glitch" rate
+   * limiter.
+   */
+  uint64_t glitch_ratelim_rate;
 } dwnx_settings;
 
 /**
  * @function
  *
  * `dwnx_settings_default` initializes |settings| with the default
- * values.  Currently, it sets 0 to all fields.
+ * values.  First this function fills |settings| with 0, and sets the
+ * default values to the following fields:
+ *
+ * - :member:`glitch_ratelim_burst
+ *   <dwnx_settings.glitch_ratelim_burst>` = 10000
+ * - :member:`glitch_ratelim_rate
+ *   <dwnx_settings.glitch_ratelim_rate>` = 330
  */
 DWNX_EXTERN void dwnx_settings_default(dwnx_settings *settings);
 
