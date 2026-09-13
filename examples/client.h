@@ -117,6 +117,10 @@ public:
 
   std::expected<void, Error>
   recv_transport_params(const dwnx_transport_params *params);
+  void save_transport_params(const std::filesystem::path &tp_file);
+  std::expected<void, Error>
+  load_transport_params(const std::filesystem::path &tp_file);
+  void load_tls_session(const std::filesystem::path &session_file);
   std::expected<void, Error> setup_codec();
   std::expected<void, Error> recv_stream_data(uint32_t flags, int64_t stream_id,
                                               std::span<const uint8_t> data);
@@ -129,11 +133,13 @@ public:
 
   void on_send_blocked(std::span<const uint8_t> data);
   void start_rev();
+  void stop_rev();
   void start_wev();
+  void stop_wev();
   std::expected<void, Error> send_blocked_packet();
 
   bool get_early_data() const;
-  void early_data_rejected();
+  std::expected<void, Error> early_data_rejected();
 
   bool should_exit() const;
 

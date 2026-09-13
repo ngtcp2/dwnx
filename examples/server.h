@@ -176,7 +176,9 @@ public:
   void write_qlog(const void *data, size_t datalen);
 
   void start_rev();
+  void stop_rev();
   void start_wev();
+  void stop_wev();
   std::expected<void, Error>
   send_packet_or_blocked(std::span<const uint8_t> data);
   std::expected<std::span<const uint8_t>, Error>
