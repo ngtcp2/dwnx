@@ -321,8 +321,8 @@ Handler::~Handler() {
   }
 
   ev_timer_stop(loop_, &timer_);
-  ev_io_stop(loop_, &wev_);
-  ev_io_stop(loop_, &rev_);
+  stop_wev();
+  stop_rev();
 
   if (ssl_) {
     SSL_set_shutdown(ssl_, SSL_get_shutdown(ssl_) | SSL_RECEIVED_SHUTDOWN);
@@ -602,7 +602,7 @@ std::expected<void, Error> Handler::init_ssl(SSL_CTX *ssl_ctx,
 }
 
 std::expected<void, Error> Handler::tls_handshake() {
-  ev_io_stop(loop_, &wev_);
+  stop_wev();
 
   ERR_clear_error();
 
@@ -615,9 +615,13 @@ std::expected<void, Error> Handler::tls_handshake() {
     case SSL_ERROR_WANT_WRITE:
       start_wev();
       return {};
-    default:
+    case SSL_ERROR_SSL:
       std::println(stderr, "SSL_do_handshake: {}",
-                   ERR_error_string(ERR_get_error(), NULL));
+                   ERR_error_string(ERR_get_error(), nullptr));
+
+      return std::unexpected{Error::CRYPTO};
+    default:
+      std::println(stderr, "SSL_do_handshake: err={}", err);
 
       return std::unexpected{Error::CRYPTO};
     }
@@ -633,7 +637,11 @@ std::expected<void, Error> Handler::tls_handshake() {
 
 std::expected<void, Error> Handler::feed_data(std::span<const uint8_t> data) {
   if (!config.quiet) {
-    std::println(stderr, "Read {} bytes from TLS stack", data.size());
+    std::println(stderr, "Read {} bytes from TLS stack{}", data.size(),
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+                 SSL_in_early_data(ssl_) ? " in early data" :
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+                 "");
   }
 
   if (auto rv =
@@ -688,8 +696,16 @@ std::expected<void, Error> Handler::read_data() {
 
         return {};
       case SSL_ERROR_WANT_WRITE:
-        // renegotiation started
+        start_wev();
+
+        return {};
+      case SSL_ERROR_SSL:
+        std::println(stderr, "SSL_read: {}",
+                     ERR_error_string(ERR_get_error(), nullptr));
+
+        return std::unexpected{Error::CRYPTO};
       default:
+        std::println(stderr, "SSL_read: err={}", err);
         return std::unexpected{Error::CRYPTO};
       }
     }
@@ -714,7 +730,7 @@ std::expected<void, Error> Handler::write_data() {
     }
   }
 
-  ev_io_stop(loop_, &wev_);
+  stop_wev();
 
   if (auto rv = write_streams(); !rv) {
     return rv;
@@ -782,13 +798,25 @@ Handler::send_packet(std::span<const uint8_t> data) {
       start_wev();
       return data;
     case SSL_ERROR_WANT_READ:
-      // renegotiation started
+      stop_wev();
+      return data;
+    case SSL_ERROR_SSL:
+      std::println(stderr, "SSL_write: {}",
+                   ERR_error_string(ERR_get_error(), nullptr));
+
+      return std::unexpected{Error::CRYPTO};
     default:
+      std::println(stderr, "SSL_write: err={}", err);
       return std::unexpected{Error::CRYPTO};
     }
   }
 
-  return data.subspan(as_unsigned(nwrite));
+  auto left = data.subspan(as_unsigned(nwrite));
+  if (!left.empty()) {
+    start_wev();
+  }
+
+  return left;
 }
 
 void Handler::on_send_blocked(std::span<const uint8_t> data) {
@@ -796,8 +824,6 @@ void Handler::on_send_blocked(std::span<const uint8_t> data) {
 
   tx_.send_blocked = true;
   tx_.blocked.data = data;
-
-  start_wev();
 }
 
 std::expected<void, Error> Handler::send_blocked_packet() {
@@ -814,8 +840,6 @@ std::expected<void, Error> Handler::send_blocked_packet() {
   if (!rest.empty()) {
     p.data = rest;
 
-    start_wev();
-
     return {};
   }
 
@@ -826,7 +850,11 @@ std::expected<void, Error> Handler::send_blocked_packet() {
 
 void Handler::start_rev() { ev_io_start(loop_, &rev_); }
 
+void Handler::stop_rev() { ev_io_stop(loop_, &rev_); }
+
 void Handler::start_wev() { ev_io_start(loop_, &wev_); }
+
+void Handler::stop_wev() { ev_io_stop(loop_, &wev_); }
 
 std::expected<void, Error> Handler::handle_error() { return {}; }
 
@@ -1108,6 +1136,11 @@ std::expected<SSL_CTX *, Error> create_ssl_ctx(const char *private_key_file,
 
   SSL_CTX_set_options(ssl_ctx, ssl_opts);
 
+  if (!SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_3_VERSION)) {
+    std::println(stderr, "SSL_CTX_set_min_proto_version failed");
+    return std::unexpected{Error::CRYPTO};
+  }
+
   if (SSL_CTX_set1_groups_list(ssl_ctx, config.groups) != 1) {
     std::println(stderr, "SSL_CTX_set1_groups_list failed");
     return std::unexpected{Error::CRYPTO};
@@ -1151,6 +1184,13 @@ std::expected<SSL_CTX *, Error> create_ssl_ctx(const char *private_key_file,
                          SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                        verify_cb);
   }
+
+  static constexpr uint8_t sid[] = "dwnx server";
+
+  SSL_CTX_set_session_id_context(ssl_ctx, sid, sizeof(sid) - 1);
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+  SSL_CTX_set_early_data_enabled(ssl_ctx, 1);
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
 
   return ssl_ctx;
 }

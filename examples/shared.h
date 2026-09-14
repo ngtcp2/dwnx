@@ -77,6 +77,8 @@ enum class Error {
   CONNECT_FAIL,
   // Idle timeout
   IDLE_TIMEOUT,
+  // Early data rejected
+  EARLY_DATA_REJECTED,
 };
 
 enum class AppProtocol {
@@ -223,6 +225,9 @@ struct std::formatter<dwnx::Error> : public std::formatter<std::string_view> {
       break;
     case dwnx::Error::IDLE_TIMEOUT:
       s = "idle timeout"sv;
+      break;
+    case dwnx::Error::EARLY_DATA_REJECTED:
+      s = "early data rejected"sv;
       break;
     }
 

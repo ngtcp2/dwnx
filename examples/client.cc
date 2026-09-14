@@ -105,7 +105,11 @@ namespace {
 void writecb(struct ev_loop *loop, ev_io *w, int revents) {
   auto c = static_cast<Client *>(w->data);
 
-  if (!c->on_write()) {
+  if (auto rv = c->on_write(); !rv) {
+    if (rv.error() == Error::EARLY_DATA_REJECTED) {
+      return;
+    }
+
     c->disconnect();
   }
 }
@@ -115,7 +119,16 @@ namespace {
 void readcb(struct ev_loop *loop, ev_io *w, int revents) {
   auto c = static_cast<Client *>(w->data);
 
-  if (!c->on_read() || !c->on_write()) {
+  if (!c->on_read()) {
+    c->disconnect();
+    return;
+  }
+
+  if (auto rv = c->on_write(); !rv) {
+    if (rv.error() == Error::EARLY_DATA_REJECTED) {
+      return;
+    }
+
     c->disconnect();
   }
 }
@@ -153,8 +166,8 @@ void Client::disconnect() {
 
   ev_timer_stop(loop_, &timer_);
 
-  ev_io_stop(loop_, &wev_);
-  ev_io_stop(loop_, &rev_);
+  stop_wev();
+  stop_rev();
 
   if (ssl_) {
     SSL_set_shutdown(ssl_, SSL_get_shutdown(ssl_) | SSL_RECEIVED_SHUTDOWN);
@@ -194,7 +207,48 @@ int recv_transport_params(dwnx_conn *conn, const dwnx_transport_params *params,
 
 std::expected<void, Error>
 Client::recv_transport_params(const dwnx_transport_params *params) {
+  if (!config.tp_file.empty()) {
+    save_transport_params(config.tp_file);
+  }
+
   return proto_codec_->setup_codec();
+}
+
+void Client::save_transport_params(const std::filesystem::path &tp_file) {
+  std::array<uint8_t, 256> data;
+
+  auto datalen =
+    dwnx_conn_encode_0rtt_transport_params(conn_, data.data(), data.size());
+  if (datalen < 0) {
+    std::println(stderr, "Could not encode 0-RTT transport parameters: {}",
+                 dwnx_strerror(static_cast<int>(datalen)));
+    return;
+  }
+
+  if (!util::write_transport_params(
+        tp_file, {data.data(), static_cast<size_t>(datalen)})) {
+    std::println(stderr, "Could not write transport parameters to {}",
+                 tp_file.native());
+  }
+}
+
+std::expected<void, Error>
+Client::load_transport_params(const std::filesystem::path &tp_file) {
+  auto params = util::read_transport_params(tp_file);
+  if (!params) {
+    return std::unexpected{params.error()};
+  }
+
+  auto rv = dwnx_conn_decode_and_set_0rtt_transport_params(
+    conn_, params->data(), params->size());
+  if (rv != 0) {
+    std::println(stderr, "dwnx_conn_decode_and_set_0rtt_transport_params: {}",
+                 dwnx_strerror(rv));
+
+    return std::unexpected{Error::QUIC};
+  }
+
+  return {};
 }
 
 namespace {
@@ -216,14 +270,6 @@ int recv_stream_data(dwnx_conn *conn, uint32_t flags, int64_t stream_id,
 } // namespace
 
 std::expected<void, Error> Client::handshake_completed() {
-  if (early_data_ && !util::get_early_data_accepted(ssl_)) {
-    if (!config.quiet) {
-      std::println(stderr, "Early data was rejected by server");
-    }
-
-    early_data_rejected();
-  }
-
   if (!config.quiet) {
     std::println(stderr, "Negotiated cipher suite is {}",
                  SSL_get_cipher_name(ssl_));
@@ -237,10 +283,6 @@ std::expected<void, Error> Client::handshake_completed() {
     if (!config.ech_config_list.empty() && util::get_ech_accepted(ssl_)) {
       std::println(stderr, "ECH was accepted");
     }
-  }
-
-  if (!config.tp_file.empty()) {
-    // TODO: Save transport parameters for 0RTT.
   }
 
   return {};
@@ -349,11 +391,29 @@ std::expected<void, Error> Client::write_stream_data_offset(int64_t stream_id,
   return proto_codec_->write_stream_data_offset(stream_id, len);
 }
 
-void Client::early_data_rejected() {
+std::expected<void, Error> Client::early_data_rejected() {
+  if (!config.quiet) {
+    std::println(stderr, "Early data was rejected by server");
+  }
+
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+  SSL_reset_early_data_reject(ssl_);
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+
+  if (auto rv = dwnx_conn_tls_early_data_rejected(conn_); rv != 0) {
+    std::println(stderr, "dwnx_conn_tls_early_data_rejected: {}",
+                 dwnx_strerror(rv));
+    return std::unexpected{Error::QUIC};
+  }
+
   proto_codec_->early_data_rejected();
 
   nstreams_done_ = 0;
   streams_.clear();
+  tx_.send_blocked = false;
+  start_wev();
+
+  return {};
 }
 
 std::expected<void, Error> Client::init(int fd, const char *addr,
@@ -410,7 +470,11 @@ std::expected<void, Error> Client::init(int fd, const char *addr,
   }
 
   if (early_data_ && !config.tp_file.empty()) {
-    // TODO: Do early data
+    if (!load_transport_params(config.tp_file)) {
+      early_data_ = false;
+    } else if (auto rv = make_stream_early(); !rv) {
+      return rv;
+    }
   }
 
   write_ = &Client::connected;
@@ -453,7 +517,42 @@ std::expected<void, Error> Client::init_ssl(SSL_CTX *ssl_ctx,
     SSL_set_tlsext_host_name(ssl_, addr_);
   }
 
+  if (!config.session_file.empty()) {
+    load_tls_session(config.session_file);
+  }
+
   return {};
+}
+
+void Client::load_tls_session(const std::filesystem::path &session_file) {
+  auto f = BIO_new_file(config.session_file.c_str(), "r");
+  if (!f) {
+    std::println(stderr, "Could not read TLS session file {}",
+                 config.session_file.native());
+    return;
+  }
+
+  auto session = PEM_read_bio_SSL_SESSION(f, nullptr, 0, nullptr);
+  BIO_free(f);
+  if (!session) {
+    std::println(stderr, "Could not read TLS session file {}",
+                 config.session_file.native());
+    return;
+  }
+
+  auto session_d = defer([session]() { SSL_SESSION_free(session); });
+
+  if (!SSL_set_session(ssl_, session)) {
+    std::println(stderr, "Could not set session");
+    return;
+  }
+
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+  if (!config.disable_early_data && SSL_SESSION_early_data_capable(session)) {
+    early_data_ = true;
+    SSL_set_early_data_enabled(ssl_, 1);
+  }
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
 }
 
 std::expected<void, Error> Client::connected() {
@@ -472,10 +571,13 @@ std::expected<void, Error> Client::connected() {
 }
 
 std::expected<void, Error> Client::tls_handshake() {
-  ev_io_stop(loop_, &wev_);
+  stop_wev();
 
   ERR_clear_error();
 
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+retry:
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
   auto rv = SSL_do_handshake(ssl_);
   if (rv <= 0) {
     auto err = SSL_get_error(ssl_, rv);
@@ -485,6 +587,19 @@ std::expected<void, Error> Client::tls_handshake() {
     case SSL_ERROR_WANT_WRITE:
       start_wev();
       return {};
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+    case SSL_ERROR_EARLY_DATA_REJECTED:
+      if (auto rv = early_data_rejected(); !rv) {
+        return rv;
+      }
+
+      goto retry;
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+    case SSL_ERROR_SSL:
+      std::println(stderr, "SSL_do_handshake: {}", err,
+                   ERR_error_string(ERR_get_error(), nullptr));
+
+      return std::unexpected{Error::CRYPTO};
     default:
       std::println(stderr, "SSL_do_handshake: {}",
                    ERR_error_string(ERR_get_error(), NULL));
@@ -496,7 +611,15 @@ std::expected<void, Error> Client::tls_handshake() {
   read_ = &Client::read_data;
   write_ = &Client::write_data;
 
-  ev_feed_event(loop_, &rev_, EV_READ);
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+  if (SSL_in_early_data(ssl_)) {
+    ev_feed_event(loop_, &wev_, EV_WRITE);
+  }
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+
+  if (SSL_pending(ssl_)) {
+    ev_feed_event(loop_, &rev_, EV_READ);
+  }
 
   return handshake_completed();
 }
@@ -558,8 +681,24 @@ std::expected<void, Error> Client::read_data() {
 
         return {};
       case SSL_ERROR_WANT_WRITE:
-        // renegotiation started
+        start_wev();
+
+        return {};
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+      case SSL_ERROR_EARLY_DATA_REJECTED:
+        if (auto rv = early_data_rejected(); !rv) {
+          return rv;
+        }
+
+        continue;
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+      case SSL_ERROR_SSL:
+        std::println(stderr, "SSL_read: {}", err,
+                     ERR_error_string(ERR_get_error(), nullptr));
+
+        return std::unexpected{Error::CRYPTO};
       default:
+        std::println(stderr, "SSL_read: err={}", err);
         return std::unexpected{Error::CRYPTO};
       }
     }
@@ -584,7 +723,7 @@ std::expected<void, Error> Client::write_data() {
     }
   }
 
-  ev_io_stop(loop_, &wev_);
+  stop_wev();
 
   if (auto rv = write_streams(); !rv) {
     return rv;
@@ -739,7 +878,11 @@ std::expected<int, Error> create_sock(Address &remote_addr, const char *addr,
 std::expected<std::span<const uint8_t>, Error>
 Client::send_packet(std::span<const uint8_t> data) {
   if (!config.quiet) {
-    std::println(stderr, "Send {} bytes", data.size());
+    std::println(stderr, "Send {} bytes{}", data.size(),
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+                 SSL_in_early_data(ssl_) ? " in early data" :
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+                                         "");
   }
 
   ERR_clear_error();
@@ -751,13 +894,40 @@ Client::send_packet(std::span<const uint8_t> data) {
       start_wev();
       return data;
     case SSL_ERROR_WANT_READ:
-      // renegotiation started
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+      if (!config.quiet && SSL_in_early_data(ssl_)) {
+        std::println(stderr, "SSL_write returned SSL_ERROR_WANT_READ");
+      }
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+
+      stop_wev();
+
+      return data;
+#if defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+    case SSL_ERROR_EARLY_DATA_REJECTED:
+      if (auto rv = early_data_rejected(); !rv) {
+        return std::unexpected{rv.error()};
+      }
+
+      return std::unexpected{Error::EARLY_DATA_REJECTED};
+#endif // defined(OPENSSL_IS_BORINGSSL) || defined(OPENSSL_IS_AWSLC)
+    case SSL_ERROR_SSL:
+      std::println(stderr, "SSL_write: {}",
+                   ERR_error_string(ERR_get_error(), nullptr));
+
+      return std::unexpected{Error::CRYPTO};
     default:
+      std::println(stderr, "SSL_write: err={}", err);
       return std::unexpected{Error::CRYPTO};
     }
   }
 
-  return data.subspan(as_unsigned(nwrite));
+  auto left = data.subspan(as_unsigned(nwrite));
+  if (!left.empty()) {
+    start_wev();
+  }
+
+  return left;
 }
 
 void Client::on_send_blocked(std::span<const uint8_t> data) {
@@ -765,8 +935,6 @@ void Client::on_send_blocked(std::span<const uint8_t> data) {
 
   tx_.send_blocked = true;
   tx_.blocked.data = data;
-
-  start_wev();
 }
 
 std::expected<void, Error> Client::send_blocked_packet() {
@@ -783,8 +951,6 @@ std::expected<void, Error> Client::send_blocked_packet() {
   if (!rest.empty()) {
     p.data = rest;
 
-    start_wev();
-
     return {};
   }
 
@@ -795,7 +961,11 @@ std::expected<void, Error> Client::send_blocked_packet() {
 
 void Client::start_rev() { ev_io_start(loop_, &rev_); }
 
+void Client::stop_rev() { ev_io_stop(loop_, &rev_); }
+
 void Client::start_wev() { ev_io_start(loop_, &wev_); }
+
+void Client::stop_wev() { ev_io_stop(loop_, &wev_); }
 
 std::expected<void, Error> Client::handle_error() { return {}; }
 
@@ -898,6 +1068,29 @@ Stream *Client::find_stream(int64_t stream_id) const {
 }
 
 namespace {
+int new_session_cb(SSL *ssl, SSL_SESSION *session) {
+  auto c = static_cast<Client *>(SSL_get_app_data(ssl));
+
+  c->ticket_received();
+
+  auto f = BIO_new_file(config.session_file.c_str(), "w");
+  if (!f) {
+    std::println(stderr, "Could not write TLS session in {}",
+                 config.session_file.native());
+    return 0;
+  }
+
+  if (!PEM_write_bio_SSL_SESSION(f, session)) {
+    std::println(stderr, "Unable to write TLS session to file");
+  }
+
+  BIO_free(f);
+
+  return 0;
+}
+} // namespace
+
+namespace {
 std::expected<SSL_CTX *, Error> create_ssl_ctx(const char *private_key_file,
                                                const char *cert_file) {
   auto ssl_ctx = SSL_CTX_new(TLS_client_method());
@@ -932,6 +1125,12 @@ std::expected<SSL_CTX *, Error> create_ssl_ctx(const char *private_key_file,
                    ERR_error_string(ERR_get_error(), nullptr));
       return std::unexpected{Error::CRYPTO};
     }
+  }
+
+  if (!config.session_file.empty()) {
+    SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_CLIENT |
+                                              SSL_SESS_CACHE_NO_INTERNAL);
+    SSL_CTX_sess_set_new_cb(ssl_ctx, new_session_cb);
   }
 
   return ssl_ctx;

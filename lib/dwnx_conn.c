@@ -3266,7 +3266,8 @@ static int delete_strm_tx_strmq(void *data, void *ptr) {
 void dwnx_conn_discard_early_data_state(dwnx_conn *conn) {
   assert(!conn->server);
 
-  conn->flags &= ~DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET;
+  conn->flags &= ~(DWNX_CONN_FLAG_EARLY_TRANSPORT_PARAMS_SET |
+                   DWNX_CONN_FLAG_QX_TRANSPORT_PARAMETERS_SENT);
   dwnx_transport_params_default(&conn->remote.transport_params);
 
   dwnx_map_each(&conn->strms, delete_strm_tx_strmq, conn);
