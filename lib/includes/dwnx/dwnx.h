@@ -1062,11 +1062,11 @@ typedef struct dwnx_callbacks {
  * If it succeeds, it assigns the pointer to the object to |*pconn|.
  * |callbacks|, |settings|, and |params| must not be NULL, and the
  * function makes a copy of each of them.  |params| is the local
- * transport parameters, and sent to a remote endpoint during
- * handshake.  |user_data| is the arbitrary pointer which is passed to
- * the user-defined callback functions.  |mem| is a memory allocator.
- * If |mem| is NULL, the memory allocator returned by
- * `dwnx_mem_default()` is used.
+ * transport parameters, and sent to a remote endpoint.  |user_data|
+ * is the arbitrary pointer which is passed to the user-defined
+ * callback functions.  |mem| is a memory allocator.  If |mem| is
+ * NULL, the memory allocator returned by `dwnx_mem_default()` is
+ * used.
  *
  * Call `dwnx_conn_del` to free memory allocated for |*pconn|.
  *
@@ -1089,11 +1089,11 @@ DWNX_EXTERN int dwnx_conn_server_new(dwnx_conn **pconn,
  * If it succeeds, it assigns the pointer to the object to |*pconn|.
  * |callbacks|, |settings|, and |params| must not be NULL, and the
  * function makes a copy of each of them.  |params| is the local
- * transport parameters, and sent to a remote endpoint during
- * handshake.  |user_data| is the arbitrary pointer which is passed to
- * the user-defined callback functions.  |mem| is a memory allocator.
- * If |mem| is NULL, the memory allocator returned by
- * `dwnx_mem_default()` is used.
+ * transport parameters, and sent to a remote endpoint.  |user_data|
+ * is the arbitrary pointer which is passed to the user-defined
+ * callback functions.  |mem| is a memory allocator.  If |mem| is
+ * NULL, the memory allocator returned by `dwnx_mem_default()` is
+ * used.
  *
  * Call `dwnx_conn_del` to free memory allocated for |*pconn|.
  *
@@ -1239,14 +1239,13 @@ DWNX_EXTERN int dwnx_conn_open_uni_stream(dwnx_conn *conn, int64_t *pstream_id,
  * abruptly.  |app_error_code| is one of application error codes, and
  * indicates the reason of shutdown.  Successful call of this function
  * does not immediately erase the state of the stream.  The actual
- * deletion is done when the remote endpoint sends acknowledgement.
- * Calling this function is equivalent to call
- * `dwnx_conn_shutdown_stream_read`, and
- * `dwnx_conn_shutdown_stream_write` sequentially with the following
- * differences.  If |stream_id| refers to a local unidirectional
- * stream, this function only shutdowns write side of the stream.  If
- * |stream_id| refers to a remote unidirectional stream, this function
- * only shutdowns read side of the stream.
+ * deletion is done when the RESET_STREAM frame is sent.  Calling this
+ * function is equivalent to call `dwnx_conn_shutdown_stream_read`,
+ * and `dwnx_conn_shutdown_stream_write` sequentially with the
+ * following differences.  If |stream_id| refers to a local
+ * unidirectional stream, this function only shutdowns write side of
+ * the stream.  If |stream_id| refers to a remote unidirectional
+ * stream, this function only shutdowns read side of the stream.
  *
  * |flags| is currently unused, and should be set to 0.
  *
