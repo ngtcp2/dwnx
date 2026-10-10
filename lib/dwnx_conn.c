@@ -333,7 +333,7 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
 
   ptr = dwnx_mem_calloc(mem, 1, sizeof(*conn) + DWNX_LOG_BUFLEN);
   if (!ptr) {
-    return DWNX_ERR_NOBUF;
+    return DWNX_ERR_NOMEM;
   }
 
   conn = ptr;
