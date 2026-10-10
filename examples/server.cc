@@ -505,7 +505,8 @@ std::expected<void, Error> Handler::extend_max_stream_data(int64_t stream_id,
 
 namespace {
 int write_stream_data_offset(dwnx_conn *conn, int64_t stream_id,
-                             uint64_t offset, size_t len, void *user_data) {
+                             uint64_t offset, size_t len, void *user_data,
+                             void *stream_user_data) {
   auto h = static_cast<Handler *>(user_data);
   if (!h->write_stream_data_offset(stream_id, offset, len)) {
     return DWNX_ERR_CALLBACK_FAILURE;

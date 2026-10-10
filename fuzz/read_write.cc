@@ -129,7 +129,8 @@ int extend_max_streams(dwnx_conn *conn, uint64_t max_streams, void *user_data) {
 
 namespace {
 int write_stream_data_offset(dwnx_conn *conn, int64_t stream_id,
-                             uint64_t offset, size_t len, void *user_data) {
+                             uint64_t offset, size_t len, void *user_data,
+                             void *stream_user_data) {
   auto fdp = static_cast<FuzzedDataProvider *>(user_data);
 
   return fdp->ConsumeBool() ? DWNX_ERR_CALLBACK_FAILURE : 0;
