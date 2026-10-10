@@ -956,7 +956,8 @@ typedef void (*dwnx_rand)(uint8_t *dest, size_t destlen);
  */
 typedef int (*dwnx_write_stream_data_offset)(dwnx_conn *conn, int64_t stream_id,
                                              uint64_t offset, size_t len,
-                                             void *user_data);
+                                             void *user_data,
+                                             void *stream_user_data);
 
 /**
  * @struct

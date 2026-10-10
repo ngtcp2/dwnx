@@ -375,7 +375,8 @@ std::expected<void, Error> Client::extend_max_stream_data(int64_t stream_id,
 
 namespace {
 int write_stream_data_offset(dwnx_conn *conn, int64_t stream_id,
-                             uint64_t offset, size_t len, void *user_data) {
+                             uint64_t offset, size_t len, void *user_data,
+                             void *stream_user_data) {
   auto c = static_cast<Client *>(user_data);
   if (!c->write_stream_data_offset(stream_id, offset, len)) {
     return DWNX_ERR_CALLBACK_FAILURE;

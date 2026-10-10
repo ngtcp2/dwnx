@@ -285,7 +285,8 @@ static int conn_call_write_stream_data_offset(dwnx_conn *conn,
   }
 
   rv = conn->callbacks.write_stream_data_offset(
-    conn, strm->stream_id, strm->tx.offset, len, conn->user_data);
+    conn, strm->stream_id, strm->tx.offset, len, conn->user_data,
+    strm->stream_user_data);
   if (rv != 0) {
     return DWNX_ERR_CALLBACK_FAILURE;
   }
