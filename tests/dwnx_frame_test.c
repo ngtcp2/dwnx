@@ -875,14 +875,15 @@ void test_dwnx_frame_encode_datagram(void) {
   dwnx_buf_init(&dbuf, buf, sizeof(buf));
 
   /* With length field */
-  fr = (dwnx_frame_datagram){
-    .type = DWNX_FRAME_DATAGRAM_LEN,
-    .data = &datav,
-    .datacnt = 1,
-  };
   datav = (dwnx_vec){
     .base = (uint8_t *)data,
     .len = dwnx_strlen_lit(data),
+  };
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .len = (size_t)dwnx_vec_len(&datav, 1),
+    .data = &datav,
+    .datacnt = 1,
   };
 
   framelen = 1 + 1 + dwnx_strlen_lit(data);
@@ -895,6 +896,7 @@ void test_dwnx_frame_encode_datagram(void) {
 
   assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
   assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.len, ==, nfr.len);
   assert_size(fr.datacnt, ==, nfr.datacnt);
   assert_memn_equal(fr.data[0].base, fr.data[0].len, nfr.data[0].base,
                     nfr.data[0].len);
@@ -910,14 +912,15 @@ void test_dwnx_frame_encode_datagram(void) {
   assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
 
   /* Without length field */
-  fr = (dwnx_frame_datagram){
-    .type = DWNX_FRAME_DATAGRAM,
-    .data = &datav,
-    .datacnt = 1,
-  };
   datav = (dwnx_vec){
     .base = (uint8_t *)data,
     .len = dwnx_strlen_lit(data),
+  };
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM,
+    .len = (size_t)dwnx_vec_len(&datav, 1),
+    .data = &datav,
+    .datacnt = 1,
   };
 
   framelen = 1 + dwnx_strlen_lit(data);
@@ -930,6 +933,7 @@ void test_dwnx_frame_encode_datagram(void) {
 
   assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
   assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.len, ==, nfr.len);
   assert_size(fr.datacnt, ==, nfr.datacnt);
   assert_memn_equal(fr.data[0].base, fr.data[0].len, nfr.data[0].base,
                     nfr.data[0].len);
@@ -944,21 +948,23 @@ void test_dwnx_frame_encode_datagram(void) {
       assert_size(0, ==, nfr.datacnt);
     } else {
       assert_size(fr.datacnt, ==, nfr.datacnt);
+      assert_size(i - 1, ==, nfr.len);
       assert_size(i - 1, ==, nfr.data[0].len);
       assert_memory_equal(i - 1, fr.data[0].base, nfr.data[0].base);
     }
   }
 
   /* Skip 0 length vector */
-  fr = (dwnx_frame_datagram){
-    .type = DWNX_FRAME_DATAGRAM_LEN,
-    .data = datav2,
-    .datacnt = 2,
-  };
   datav2[0] = (dwnx_vec){0};
   datav2[1] = (dwnx_vec){
     .base = (uint8_t *)data,
     .len = dwnx_strlen_lit(data),
+  };
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .len = (size_t)dwnx_vec_len(datav2, 2),
+    .data = datav2,
+    .datacnt = 2,
   };
 
   framelen = 1 + 1 + dwnx_strlen_lit(data);
@@ -971,6 +977,7 @@ void test_dwnx_frame_encode_datagram(void) {
 
   assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
   assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.len, ==, nfr.len);
   assert_size(1, ==, nfr.datacnt);
   assert_memn_equal(fr.data[1].base, fr.data[1].len, nfr.data[0].base,
                     nfr.data[0].len);
@@ -982,11 +989,6 @@ void test_dwnx_frame_encode_datagram(void) {
   }
 
   /* data span across 2 vectors */
-  fr = (dwnx_frame_datagram){
-    .type = DWNX_FRAME_DATAGRAM_LEN,
-    .data = datav2,
-    .datacnt = 2,
-  };
   datav2[0] = (dwnx_vec){
     .base = (uint8_t *)data,
     .len = 5,
@@ -994,6 +996,12 @@ void test_dwnx_frame_encode_datagram(void) {
   datav2[1] = (dwnx_vec){
     .base = (uint8_t *)data + 5,
     .len = dwnx_strlen_lit(data) - 5,
+  };
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .len = (size_t)dwnx_vec_len(datav2, 2),
+    .data = datav2,
+    .datacnt = 2,
   };
 
   framelen = 1 + 1 + dwnx_strlen_lit(data);
@@ -1006,6 +1014,7 @@ void test_dwnx_frame_encode_datagram(void) {
 
   assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
   assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.len, ==, nfr.len);
   assert_size(1, ==, nfr.datacnt);
   assert_size(dwnx_strlen_lit(data), ==, nfr.data[0].len);
   assert_memn_equal(fr.data[0].base, fr.data[0].len, nfr.data[0].base,
@@ -1046,6 +1055,7 @@ void test_dwnx_frame_encode_datagram(void) {
 
   assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
   assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.len, ==, nfr.len);
   assert_size(fr.datacnt, ==, nfr.datacnt);
 
   /* empty DATAGRAM without length */
@@ -1063,6 +1073,7 @@ void test_dwnx_frame_encode_datagram(void) {
 
   assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
   assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.len, ==, nfr.len);
   assert_size(fr.datacnt, ==, nfr.datacnt);
 }
 
@@ -1415,6 +1426,7 @@ void test_dwnx_frd_decode(void) {
   /* DATAGRAM (length) */
   fr.datagram = (dwnx_frame_datagram){
     .type = DWNX_FRAME_DATAGRAM_LEN,
+    .len = 111,
     .data =
       &(dwnx_vec){
         .base = nulldata,
@@ -1433,6 +1445,7 @@ void test_dwnx_frd_decode(void) {
   assert_int(0, ==, rv);
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_DATAGRAM_LEN, ==, nfr.hd.type);
+  assert_size(fr.datagram.len, ==, nfr.datagram.len);
   assert_size(fr.datagram.datacnt, ==, nfr.datagram.datacnt);
   assert_memn_equal(fr.datagram.data[0].base, fr.datagram.data[0].len,
                     nfr.datagram.data[0].base, nfr.datagram.data[0].len);
@@ -1440,6 +1453,7 @@ void test_dwnx_frd_decode(void) {
   /* DATAGRAM */
   fr.datagram = (dwnx_frame_datagram){
     .type = DWNX_FRAME_DATAGRAM,
+    .len = 111,
     .data =
       &(dwnx_vec){
         .base = nulldata,
@@ -1458,6 +1472,7 @@ void test_dwnx_frd_decode(void) {
   assert_int(0, ==, rv);
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_DATAGRAM, ==, nfr.hd.type);
+  assert_size(fr.datagram.len, ==, nfr.datagram.len);
   assert_size(fr.datagram.datacnt, ==, nfr.datagram.datacnt);
   assert_memn_equal(fr.datagram.data[0].base, fr.datagram.data[0].len,
                     nfr.datagram.data[0].base, nfr.datagram.data[0].len);

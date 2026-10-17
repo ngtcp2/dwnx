@@ -242,6 +242,12 @@ static void log_fr_connection_close(dwnx_log *log,
                      " reason=[", ascii(fr->reason, reasonlen), "]");
 }
 
+static void log_fr_datagram(dwnx_log *log, const dwnx_frame_datagram *fr,
+                            const char *dir) {
+  dwnx_log_infof_raw(log, DWNX_LOG_EVENT_FRM, dir, " DATAGRAM(0x",
+                     hex(fr->type), ") len=", fr->len);
+}
+
 static void log_fr(dwnx_log *log, const dwnx_frame *fr, const char *dir) {
   switch (fr->hd.type) {
   case DWNX_FRAME_QX_TRANSPORT_PARAMETERS:
@@ -286,6 +292,10 @@ static void log_fr(dwnx_log *log, const dwnx_frame *fr, const char *dir) {
   case DWNX_FRAME_CONNECTION_CLOSE:
   case DWNX_FRAME_CONNECTION_CLOSE_APP:
     log_fr_connection_close(log, &fr->connection_close, dir);
+    break;
+  case DWNX_FRAME_DATAGRAM:
+  case DWNX_FRAME_DATAGRAM_LEN:
+    log_fr_datagram(log, &fr->datagram, dir);
     break;
   default:
     dwnx_unreachable();

@@ -1403,8 +1403,10 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  *
  * This function may return :macro:`DWNX_ERR_WRITE_MORE` error code.
  * It indicates that there are more spaces in the record, the caller
- * should call this function again to send another stream data.  If no
- * stream data is available, specify |stream_id| to -1.
+ * should call this function (or other write functions such as
+ * `dwnx_conn_writev_datagram` or `dwnx_conn_write_record`) again to
+ * send another stream data or datagram.  If no stream data is
+ * available, specify |stream_id| to -1.
  *
  * This function may return :macro:`DWNX_ERR_STREAM_DATA_BLOCKED`
  * error code.  It indicates that the flow control prevents from the
@@ -1417,9 +1419,10 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  * If the other negative error codes are returned, QMux connection
  * must be closed.
  *
- * The rule of this function call is keep calling this function until
- * it returns 0 or a positive integer, or the negative error code
- * other than :macro:`DWNX_ERR_WRITE_MORE`,
+ * The rule of this function call is keep calling this function (or
+ * other write functions such as `dwnx_conn_writev_datagram`,
+ * `dwnx_conn_write_record`) until it returns 0 or a positive integer,
+ * or the negative error code other than :macro:`DWNX_ERR_WRITE_MORE`,
  * :macro:`DWNX_ERR_STREAM_DATA_BLOCKED`, and
  * :macro:`DWNX_ERR_STREAM_SHUT_WR`.  If the function returns 0, it
  * means that there is nothing to send.
@@ -1443,8 +1446,9 @@ DWNX_EXTERN uint64_t dwnx_conn_get_streams_uni_left(const dwnx_conn *conn);
  * :macro:`DWNX_ERR_STREAM_DATA_BLOCKED`
  *     Stream is blocked because of flow control.
  * :macro:`DWNX_ERR_WRITE_MORE`
- *     Application can call this function to pack more stream data
- *     into the same record.  See above to know how it works.
+ *     Application can call this function (or other write functions)
+ *     to pack more data into the same record.  See above to know how
+ *     it works.
  * :macro:`DWNX_ERR_NOBUF`
  *     Buffer is too small.
  *
@@ -1467,6 +1471,101 @@ DWNX_EXTERN dwnx_ssize dwnx_conn_write_stream(dwnx_conn *conn, uint8_t *dest,
                                               uint32_t flags, int64_t stream_id,
                                               const uint8_t *data,
                                               size_t datalen, dwnx_tstamp ts);
+
+/**
+ * @macrosection
+ *
+ * Write datagram data flags
+ */
+
+/**
+ * @macro
+ *
+ * :macro:`DWNX_WRITE_DATAGRAM_FLAG_NONE` indicates no flag set.
+ */
+#define DWNX_WRITE_DATAGRAM_FLAG_NONE 0x00U
+
+/**
+ * @function
+ *
+ * `dwnx_conn_writev_datagram` writes the datagram in a single QMux
+ * record.  The buffer of the record is pointed by |dest| of length
+ * |destlen|.  It returns the number of bytes written to the buffer
+ * pointed by |dest| if it succeeds.
+ *
+ * |destlen| should be at least :macro:`DWNX_DEFAULT_MAX_RECORD_SIZE`.
+ * The caller may provide a smaller sized buffer if the full sized TLS
+ * record cannot be sent because the congestion window is not wide
+ * open.
+ *
+ * The |flags| should be bitwise-OR of zero or more of
+ * :macro:`DWNX_WRITE_DATAGRAM_FLAG_*
+ * <DWNX_WRITE_DATAGRAM_FLAG_NONE>`.
+ *
+ * The datagram is specified as vector of data |datav|.  |datavcnt|
+ * specifies the number of :type:`dwnx_vec` that |datav| includes.  If
+ * the datagram is written to the record, and this function succeeds
+ * (or it returns :macro:`DWNX_ERR_WRITE_MORE`), a nonzero value is
+ * assigned to |*paccepted| if it is not NULL.
+ *
+ * This record may contain frames other than DATAGRAM frame.  The
+ * record might not contain DATAGRAM frame if other frames occupy the
+ * frame.  In that case, |*paccepted| would be 0 if it is not NULL.
+ *
+ * This function may return :macro:`DWNX_ERR_WRITE_MORE` error code.
+ * It indicates that there are more spaces in the record, the caller
+ * should call this function (or other write functions such as
+ * `dwnx_conn_writev_stream`, `dwnx_conn_write_record`) again to send
+ * another datagram or stream data.
+ *
+ * If the other negative error codes are returned, QMux connection
+ * must be closed.
+ *
+ * The rule of this function call is keep calling this function (or
+ * other write functions such as `dwnx_conn_writev_stream`,
+ * `dwnx_conn_write_record`) until it returns 0 or a positive integer,
+ * or the negative error code other than :macro:`DWNX_ERR_WRITE_MORE`.
+ * If the function returns 0, it means that there is nothing to send.
+ *
+ * This function must not be called from inside the callback
+ * functions.
+ *
+ * This function returns the number of bytes written in |dest| if it
+ * succeeds, or one of the following negative error codes:
+ *
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE`
+ *     User callback failed
+ * :macro:`DWNX_ERR_INVALID_STATE`
+ *     The remote endpoint does not support DATAGRAM.
+ * :macro:`DWNX_ERR_INVALID_ARGUMENT`
+ *     The total length of stream data is too large; or it is larger
+ *     than the amount the remote endpoint is willingly accept.
+ * :macro:`DWNX_ERR_WRITE_MORE`
+ *     Application can call this function (or other write functions)
+ *     to pack more data into the same record.  See above to know how
+ *     it works.
+ * :macro:`DWNX_ERR_NOBUF`
+ *     Buffer is too small.
+ *
+ * If any other negative error is returned, close the connection.
+ */
+DWNX_EXTERN dwnx_ssize dwnx_conn_writev_datagram(
+  dwnx_conn *conn, uint8_t *dest, size_t destlen, int *paccepted,
+  uint32_t flags, const dwnx_vec *datav, size_t datavcnt, dwnx_tstamp ts);
+
+/**
+ * @function
+ *
+ * `dwnx_conn_write_datagram` works like `dwnx_conn_writev_datagram`,
+ * but it can accept a single datagram vector.
+ */
+DWNX_EXTERN dwnx_ssize dwnx_conn_write_datagram(dwnx_conn *conn, uint8_t *dest,
+                                                size_t destlen, int *paccepted,
+                                                uint32_t flags,
+                                                const uint8_t *data,
+                                                size_t datalen, dwnx_tstamp ts);
 
 /**
  * @function

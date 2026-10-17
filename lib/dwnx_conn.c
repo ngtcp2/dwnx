@@ -2613,6 +2613,63 @@ dwnx_ssize dwnx_conn_writev_stream(dwnx_conn *conn, uint8_t *dest,
   return dwnx_conn_write_vmsg(conn, dest, destlen, pvmsg, ts);
 }
 
+dwnx_ssize dwnx_conn_write_datagram(dwnx_conn *conn, uint8_t *dest,
+                                    size_t destlen, int *paccepted,
+                                    uint32_t flags, const uint8_t *data,
+                                    size_t datalen, dwnx_tstamp ts) {
+  return dwnx_conn_writev_datagram(conn, dest, destlen, paccepted, flags,
+                                   &(dwnx_vec){
+                                     .base = (uint8_t *)data,
+                                     .len = datalen,
+                                   },
+                                   1, ts);
+}
+
+dwnx_ssize dwnx_conn_writev_datagram(dwnx_conn *conn, uint8_t *dest,
+                                     size_t destlen, int *paccepted,
+                                     uint32_t flags, const dwnx_vec *datav,
+                                     size_t datavcnt, dwnx_tstamp ts) {
+  dwnx_vmsg vmsg;
+  int64_t datalen;
+
+  conn_update_timestamp(conn, ts);
+
+  if (paccepted) {
+    *paccepted = 0;
+  }
+
+  if (conn->remote.transport_params.max_datagram_frame_size == 0) {
+    return DWNX_ERR_INVALID_STATE;
+  }
+
+  datalen = dwnx_vec_len_varint(datav, datavcnt);
+  if (datalen == -1
+#if SIZE_MAX < UINT64_MAX
+      || (uint64_t)datalen > SIZE_MAX
+#endif /* SIZE_MAX < UINT64_MAX */
+  ) {
+    return DWNX_ERR_INVALID_ARGUMENT;
+  }
+
+  if (conn->remote.transport_params.max_datagram_frame_size <
+      dwnx_frame_datagram_framelen((size_t)datalen)) {
+    return DWNX_ERR_INVALID_ARGUMENT;
+  }
+
+  vmsg = (dwnx_vmsg){
+    .type = DWNX_VMSG_TYPE_DATAGRAM,
+    .datagram =
+      {
+        .data = datav,
+        .datacnt = datavcnt,
+        .paccepted = paccepted,
+        .flags = flags,
+      },
+  };
+
+  return dwnx_conn_write_vmsg(conn, dest, destlen, &vmsg, ts);
+}
+
 dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
                                 dwnx_vmsg *vmsg, dwnx_tstamp ts) {
   size_t nwrite;
@@ -2642,19 +2699,29 @@ dwnx_ssize dwnx_conn_write_vmsg(dwnx_conn *conn, uint8_t *dest, size_t destlen,
   }
 
   if (rv != DWNX_ERR_NOBUF && vmsg) {
-    assert(vmsg->type == DWNX_VMSG_TYPE_STREAM);
+    if (vmsg->type == DWNX_VMSG_TYPE_STREAM) {
+      rv = dwnx_conn_write_stream_frame(
+        conn, vmsg->stream.pdatalen, vmsg->stream.strm, vmsg->stream.flags,
+        vmsg->stream.data, vmsg->stream.datacnt, ts);
+      /* vmsg->stream.strm may be deleted */
+      if (rv < 0 && rv != DWNX_ERR_NOBUF) {
+        return rv;
+      }
 
-    rv = dwnx_conn_write_stream_frame(
-      conn, vmsg->stream.pdatalen, vmsg->stream.strm, vmsg->stream.flags,
-      vmsg->stream.data, vmsg->stream.datacnt, ts);
-    /* vmsg->stream.strm may be deleted */
-    if (rv < 0 && rv != DWNX_ERR_NOBUF) {
-      return rv;
-    }
+      if (rv == 0 && dwnx_qre_left(&conn->tx.qre)) {
+        return DWNX_ERR_WRITE_MORE;
+      }
+    } else if (vmsg->type == DWNX_VMSG_TYPE_DATAGRAM) {
+      rv = dwnx_conn_write_datagram_frame(
+        conn, vmsg->datagram.paccepted, vmsg->datagram.flags,
+        vmsg->datagram.data, vmsg->datagram.datacnt, ts);
+      if (rv < 0 && rv != DWNX_ERR_NOBUF) {
+        return rv;
+      }
 
-    if (rv == 0 && dwnx_qre_left(&conn->tx.qre) &&
-        dwnx_conn_get_max_data_left(conn)) {
-      return DWNX_ERR_WRITE_MORE;
+      if (rv == 0 && dwnx_qre_left(&conn->tx.qre)) {
+        return DWNX_ERR_WRITE_MORE;
+      }
     }
   }
 
@@ -2949,7 +3016,7 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
       }
     }
 
-    if (dwnx_conn_get_max_data_left(conn)) {
+    if (strm->tx.max_offset == strm->tx.offset) {
       return DWNX_ERR_STREAM_DATA_BLOCKED;
     }
 
@@ -3019,6 +3086,34 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
 
   if (pdatalen) {
     *pdatalen = wdatalen;
+  }
+
+  return 0;
+}
+
+int dwnx_conn_write_datagram_frame(dwnx_conn *conn, int *paccepted,
+                                   uint32_t flags, const dwnx_vec *datav,
+                                   size_t datavcnt, dwnx_tstamp ts) {
+  dwnx_qre *qre = &conn->tx.qre;
+  dwnx_frame fr;
+  int rv;
+  (void)flags;
+  (void)ts;
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .len = (size_t)dwnx_vec_len(datav, datavcnt),
+    .data = datav,
+    .datacnt = datavcnt,
+  };
+
+  rv = dwnx_qre_encode_frame(qre, &fr);
+  if (rv != 0) {
+    return rv;
+  }
+
+  if (paccepted) {
+    *paccepted = 1;
   }
 
   return 0;

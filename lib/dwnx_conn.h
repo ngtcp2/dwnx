@@ -232,6 +232,7 @@ int dwnx_conn_tx_strmq_push_if_not(dwnx_conn *conn, dwnx_strm *strm);
 
 typedef enum dwnx_vmsg_type {
   DWNX_VMSG_TYPE_STREAM,
+  DWNX_VMSG_TYPE_DATAGRAM,
 } dwnx_vmsg_type;
 
 typedef struct dwnx_vmsg_stream {
@@ -250,10 +251,25 @@ typedef struct dwnx_vmsg_stream {
   uint32_t flags;
 } dwnx_vmsg_stream;
 
+typedef struct dwnx_vmsg_datagram {
+  /* data is the pointer to dwnx_vec array which contains the datagram
+     data to send. */
+  const dwnx_vec *data;
+  /* datacnt is the number of dwnx_vec pointed by data. */
+  size_t datacnt;
+  /* paccepted is the pointer to the variable which, if it is not
+     NULL, is assigned nonzero if data is written to the record. */
+  int *paccepted;
+  /* flags is bitwise OR of zero or more of
+     DWNX_WRITE_DATAGRAM_FLAG_*. */
+  uint32_t flags;
+} dwnx_vmsg_datagram;
+
 typedef struct dwnx_vmsg {
   dwnx_vmsg_type type;
   union {
     dwnx_vmsg_stream stream;
+    dwnx_vmsg_datagram datagram;
   };
 } dwnx_vmsg;
 
@@ -275,6 +291,10 @@ int dwnx_conn_write_stream_frame(dwnx_conn *conn, dwnx_ssize *pdatalen,
                                  dwnx_strm *strm, uint32_t flags,
                                  const dwnx_vec *datav, size_t datavcnt,
                                  dwnx_tstamp ts);
+
+int dwnx_conn_write_datagram_frame(dwnx_conn *conn, int *paccepted,
+                                   uint32_t flags, const dwnx_vec *datav,
+                                   size_t datavcnt, dwnx_tstamp ts);
 
 dwnx_tstamp dwnx_conn_get_idle_expiry(const dwnx_conn *conn);
 

@@ -33,6 +33,7 @@
 
 #include "dwnx_transport_params.h"
 #include "dwnx_buf.h"
+#include "dwnx_vec.h"
 
 #define DWNX_FRAME_QX_TRANSPORT_PARAMETERS 0x3F5153300D0A0D0AULL
 #define DWNX_FRAME_QX_PING_REQUEST 0x348C67529EF8C7BDULL
@@ -159,6 +160,9 @@ typedef struct dwnx_frame_connection_close {
 
 typedef struct dwnx_frame_datagram {
   uint64_t type;
+  size_t len;
+  /* data and datacnt is the datagram data.  They are only used when
+     encoding the frame.  They should contain exactly len bytes. */
   const dwnx_vec *data;
   size_t datacnt;
 } dwnx_frame_datagram;
