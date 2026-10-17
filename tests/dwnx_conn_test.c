@@ -52,6 +52,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_recv_connection_close_app),
   munit_void_test(test_dwnx_conn_recv_padding),
   munit_void_test(test_dwnx_conn_recv_qx_ping),
+  munit_void_test(test_dwnx_conn_recv_datagram),
   munit_void_test(test_dwnx_conn_extend_max_stream_offset),
   munit_void_test(test_dwnx_conn_extend_max_offset),
   munit_void_test(test_dwnx_conn_extend_max_streams),
@@ -129,6 +130,13 @@ typedef struct userdata {
     size_t ncalled;
     uint64_t max_streams;
   } extend_max_local_streams_uni;
+  struct {
+    size_t ncalled;
+    int fin;
+    size_t dgramlen;
+    size_t offset;
+    size_t datalen;
+  } recv_datagram;
 } userdata;
 
 typedef struct conn_options {
@@ -260,6 +268,22 @@ static int extend_max_local_streams_uni(dwnx_conn *conn, uint64_t max_streams,
 
   ++ud->extend_max_local_streams_uni.ncalled;
   ud->extend_max_local_streams_uni.max_streams = max_streams;
+
+  return 0;
+}
+
+static int recv_datagram(dwnx_conn *conn, int fin, size_t dgramlen,
+                         size_t offset, const uint8_t *data, size_t datalen,
+                         void *user_data) {
+  userdata *ud = user_data;
+  (void)conn;
+  (void)data;
+
+  ++ud->recv_datagram.ncalled;
+  ud->recv_datagram.fin = fin;
+  ud->recv_datagram.dgramlen = dgramlen;
+  ud->recv_datagram.offset = offset;
+  ud->recv_datagram.datalen = datalen;
 
   return 0;
 }
@@ -4465,6 +4489,347 @@ void test_dwnx_conn_recv_qx_ping(void) {
 
     dwnx_conn_del(conn);
   }
+}
+
+void test_dwnx_conn_recv_datagram(void) {
+  static const dwnx_transport_params params = {
+    .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
+    .max_datagram_frame_size = 65535,
+  };
+  static const dwnx_transport_params small_params = {
+    .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
+    .max_datagram_frame_size = 1000,
+  };
+  dwnx_conn *conn;
+  dwnx_callbacks callbacks;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  int rv;
+  dwnx_frd frd;
+  conn_options opts;
+  userdata ud;
+  size_t i;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+  dwnx_frd_init(&frd);
+
+  /* Receive DATAGRAM (length) */
+  server_default_callbacks(&callbacks);
+  callbacks.recv_datagram = recv_datagram;
+
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .params = &params,
+    .user_data = &ud,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .len = 111,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.recv_datagram.ncalled);
+  assert_true(ud.recv_datagram.fin);
+  assert_size(111, ==, ud.recv_datagram.dgramlen);
+  assert_size(0, ==, ud.recv_datagram.offset);
+  assert_size(111, ==, ud.recv_datagram.datalen);
+
+  dwnx_conn_del(conn);
+
+  /* Receive 1 byte at a time */
+  server_default_callbacks(&callbacks);
+  callbacks.recv_datagram = recv_datagram;
+
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .params = &params,
+    .user_data = &ud,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  ud = (userdata){0};
+  for (i = 0; i < dwnx_buf_len(&buf); ++i) {
+    rv = dwnx_conn_read(conn, buf.pos + i, 1, ++ts);
+
+    assert_int(0, ==, rv);
+
+    if (i >= 5) {
+      assert_size(i - 4, ==, ud.recv_datagram.ncalled);
+
+      if (i == dwnx_buf_len(&buf) - 1) {
+        assert_true(ud.recv_datagram.fin);
+      } else {
+        assert_false(ud.recv_datagram.fin);
+      }
+
+      assert_size(111, ==, ud.recv_datagram.dgramlen);
+      assert_size(i - 5, ==, ud.recv_datagram.offset);
+      assert_size(1, ==, ud.recv_datagram.datalen);
+    }
+  }
+
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(111, ==, ud.recv_datagram.ncalled);
+  assert_true(ud.recv_datagram.fin);
+  assert_size(111, ==, ud.recv_datagram.dgramlen);
+  assert_size(110, ==, ud.recv_datagram.offset);
+  assert_size(1, ==, ud.recv_datagram.datalen);
+
+  dwnx_conn_del(conn);
+
+  /* DATAGRAM (length) but length missing */
+  opts = (conn_options){
+    .params = &params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, 1);
+  buf.last = dwnx_put_uvarint(buf.last, DWNX_FRAME_DATAGRAM_LEN);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_FRAME_ENCODING, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* DATAGRAM (length) but length is truncated */
+  opts = (conn_options){
+    .params = &params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, 2);
+  buf.last = dwnx_put_uvarint(buf.last, DWNX_FRAME_DATAGRAM_LEN);
+  buf.last = dwnx_put_uvarint(buf.last, 100);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_FRAME_ENCODING, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* DATAGRAM (length) but length is truncated */
+  opts = (conn_options){
+    .params = &params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  buf.last = dwnx_put_uvarint(buf.last, 3 + 99);
+  buf.last = dwnx_put_uvarint(buf.last, DWNX_FRAME_DATAGRAM_LEN);
+  buf.last = dwnx_put_uvarint(buf.last, 100);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_FRAME_ENCODING, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive DATAGRAM (length) that is larger than what the local
+     endpoint accepts */
+  opts = (conn_options){
+    .params = &small_params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .len = 1001,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* empty DATAGRAM (length) */
+  server_default_callbacks(&callbacks);
+  callbacks.recv_datagram = recv_datagram;
+
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .params = &params,
+    .user_data = &ud,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_size(1, ==, ud.recv_datagram.ncalled);
+  assert_size(0, ==, ud.recv_datagram.dgramlen);
+  assert_size(0, ==, ud.recv_datagram.offset);
+  assert_size(0, ==, ud.recv_datagram.datalen);
+
+  dwnx_conn_del(conn);
+
+  /* Receive empty DATAGRAM (length) when DATAGRAM is not supported by
+     the local endpoint */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive DATAGRAM */
+  server_default_callbacks(&callbacks);
+  callbacks.recv_datagram = recv_datagram;
+
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .params = &params,
+    .user_data = &ud,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM,
+    .len = 111,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_enum(dwnx_record_read_state, DWNX_RECORD_READ_STATE_RECORD_SIZE, ==,
+              conn->rx.rcrd.state);
+  assert_size(0, ==, conn->rx.rcrd.record_left);
+  assert_size(1, ==, ud.recv_datagram.ncalled);
+  assert_true(ud.recv_datagram.fin);
+  assert_size(111, ==, ud.recv_datagram.dgramlen);
+  assert_size(0, ==, ud.recv_datagram.offset);
+  assert_size(111, ==, ud.recv_datagram.datalen);
+
+  dwnx_conn_del(conn);
+
+  /* empty DATAGRAM */
+  server_default_callbacks(&callbacks);
+  callbacks.recv_datagram = recv_datagram;
+
+  opts = (conn_options){
+    .callbacks = &callbacks,
+    .params = &params,
+    .user_data = &ud,
+  };
+
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  ud = (userdata){0};
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(0, ==, rv);
+  assert_size(1, ==, ud.recv_datagram.ncalled);
+  assert_size(0, ==, ud.recv_datagram.dgramlen);
+  assert_size(0, ==, ud.recv_datagram.offset);
+  assert_size(0, ==, ud.recv_datagram.datalen);
+
+  dwnx_conn_del(conn);
+
+  /* Receive DATAGRAM that is larger than what the local endpoint accepts */
+  opts = (conn_options){
+    .params = &small_params,
+  };
+  setup_default_server_with_options(&conn, opts);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM,
+    .len = 1001,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* Receive empty DATAGRAM when the local endpoint does not support
+     DATAGRAM */
+  setup_default_server(&conn);
+  dwnx_read_transport_params(conn, &empty_remote_params, ++ts);
+
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM,
+  };
+
+  dwnx_buf_reset(&buf);
+  dwnx_write_record(&buf, &fr, 1);
+
+  rv = dwnx_conn_read(conn, buf.pos, dwnx_buf_len(&buf), ++ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
 }
 
 void test_dwnx_conn_extend_max_stream_offset(void) {
