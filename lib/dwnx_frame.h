@@ -52,6 +52,9 @@
 #define DWNX_FRAME_STREAMS_BLOCKED_UNI 0x17ULL
 #define DWNX_FRAME_CONNECTION_CLOSE 0x1CULL
 #define DWNX_FRAME_CONNECTION_CLOSE_APP 0x1DULL
+/* https://datatracker.ietf.org/doc/html/rfc9221 */
+#define DWNX_FRAME_DATAGRAM 0x30ULL
+#define DWNX_FRAME_DATAGRAM_LEN 0x31ULL
 
 /* STREAM frame specific macros */
 #define DWNX_STREAM_FIN_BIT 0x01U
@@ -154,6 +157,12 @@ typedef struct dwnx_frame_connection_close {
   const uint8_t *reason;
 } dwnx_frame_connection_close;
 
+typedef struct dwnx_frame_datagram {
+  uint64_t type;
+  const dwnx_vec *data;
+  size_t datacnt;
+} dwnx_frame_datagram;
+
 typedef union dwnx_frame {
   dwnx_frame_hd hd;
   dwnx_frame_qx_transport_parameters qx_transport_parameters;
@@ -169,6 +178,7 @@ typedef union dwnx_frame {
   dwnx_frame_stream_data_blocked stream_data_blocked;
   dwnx_frame_streams_blocked streams_blocked;
   dwnx_frame_connection_close connection_close;
+  dwnx_frame_datagram datagram;
 } dwnx_frame;
 
 dwnx_ssize dwnx_frame_encode(uint8_t *out, size_t outlen, const dwnx_frame *fr);
@@ -348,6 +358,19 @@ dwnx_frame_encode_streams_blocked(uint8_t *out, size_t outlen,
 dwnx_ssize
 dwnx_frame_encode_connection_close(uint8_t *out, size_t outlen,
                                    const dwnx_frame_connection_close *fr);
+
+/*
+ * dwnx_frame_encode_datagram encodes DATAGRAM frame |fr| into the
+ * buffer pointed by |out| of length |outlen|.
+ *
+ * This function returns the number of bytes written if it succeeds,
+ * or one of the following negative error codes:
+ *
+ * DWNX_ERR_NOBUF
+ *     Buffer does not have enough capacity to write a frame.
+ */
+dwnx_ssize dwnx_frame_encode_datagram(uint8_t *out, size_t outlen,
+                                      const dwnx_frame_datagram *fr);
 
 /*
  * dwnx_frd is the QUIC frame decoder.  It does not support decoding
@@ -592,5 +615,28 @@ dwnx_ssize dwnx_frame_decode_streams_blocked(dwnx_frame_streams_blocked *dest,
 dwnx_ssize dwnx_frame_decode_connection_close(dwnx_frame_connection_close *dest,
                                               const uint8_t *payload,
                                               size_t payloadlen);
+
+/*
+ * dwnx_frame_decode_datagram decodes DATAGRAM frame from |payload| of
+ * length |payloadlen|.  The result is stored in the object pointed by
+ * |dest|.  DATAGRAM frame must start at payload[0].  The caller must
+ * assign non-NULL dwnx_vec to |dest|->data before calling this
+ * function.  This function finishes when it decodes one DATAGRAM
+ * frame, and returns the exact number of bytes read to decode a frame
+ * if it succeeds, or one of the following negative error codes:
+ *
+ * DWNX_ERR_FRAME_ENCODING
+ *     Payload is too short to include DATAGRAM frame.
+ */
+dwnx_ssize dwnx_frame_decode_datagram(dwnx_frame_datagram *dest,
+                                      const uint8_t *payload,
+                                      size_t payloadlen);
+
+/*
+ * dwnx_frame_datagram_framelen returns the length of the encoded
+ * DATAGRAM frame that contains |datalen| bytes of data.  It includes
+ * the frame type and length.
+ */
+size_t dwnx_frame_datagram_framelen(size_t datalen);
 
 #endif /* !defined(DWNX_FRAME_H) */
