@@ -103,6 +103,11 @@ dwnx_ssize dwnx_transport_params_encode(uint8_t *dest, size_t destlen,
                            params->max_record_size);
   }
 
+  if (params->max_datagram_frame_size) {
+    len += varint_paramlen(DWNX_TRANSPORT_PARAM_MAX_DATAGRAM_FRAME_SIZE,
+                           params->max_datagram_frame_size);
+  }
+
   if (dest == NULL && destlen == 0) {
     return (dwnx_ssize)len;
   }
@@ -153,6 +158,11 @@ dwnx_ssize dwnx_transport_params_encode(uint8_t *dest, size_t destlen,
   if (params->max_record_size != DWNX_DEFAULT_MAX_RECORD_SIZE) {
     p = write_varint_param(p, DWNX_TRANSPORT_PARAM_MAX_RECORD_SIZE,
                            params->max_record_size);
+  }
+
+  if (params->max_datagram_frame_size) {
+    p = write_varint_param(p, DWNX_TRANSPORT_PARAM_MAX_DATAGRAM_FRAME_SIZE,
+                           params->max_datagram_frame_size);
   }
 
   assert((size_t)(p - dest) == len);
@@ -307,6 +317,12 @@ int dwnx_transport_params_decode(dwnx_transport_params *dest,
       break;
     case DWNX_TRANSPORT_PARAM_MAX_RECORD_SIZE:
       if (decode_varint_param(&dest->max_record_size, &p, end) != 0) {
+        return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
+      }
+
+      break;
+    case DWNX_TRANSPORT_PARAM_MAX_DATAGRAM_FRAME_SIZE:
+      if (decode_varint_param(&dest->max_datagram_frame_size, &p, end) != 0) {
         return DWNX_ERR_MALFORMED_TRANSPORT_PARAM;
       }
 
