@@ -138,6 +138,15 @@ int write_stream_data_offset(dwnx_conn *conn, int64_t stream_id,
 } // namespace
 
 namespace {
+int recv_datagram(dwnx_conn *conn, int fin, size_t dgramlen, size_t offset,
+                  const uint8_t *data, size_t datalen, void *user_data) {
+  auto fdp = static_cast<FuzzedDataProvider *>(user_data);
+
+  return fdp->ConsumeBool() ? DWNX_ERR_CALLBACK_FAILURE : 0;
+}
+} // namespace
+
+namespace {
 dwnx_conn *setup_conn(FuzzedDataProvider &fdp, const dwnx_mem &mem) {
   static constexpr dwnx_callbacks callbacks{
     .rand = rand,
@@ -154,6 +163,7 @@ dwnx_conn *setup_conn(FuzzedDataProvider &fdp, const dwnx_mem &mem) {
     .extend_max_remote_streams_bidi = extend_max_streams,
     .extend_max_remote_streams_uni = extend_max_streams,
     .write_stream_data_offset = write_stream_data_offset,
+    .recv_datagram = recv_datagram,
   };
 
   dwnx_settings settings;
@@ -178,6 +188,8 @@ dwnx_conn *setup_conn(FuzzedDataProvider &fdp, const dwnx_mem &mem) {
     fdp.ConsumeIntegralInRange<uint64_t>(0, DWNX_MAX_VARINT);
   params.max_record_size = fdp.ConsumeIntegralInRange<uint64_t>(
     DWNX_DEFAULT_MAX_RECORD_SIZE, DWNX_MAX_VARINT);
+  params.max_datagram_frame_size =
+    fdp.ConsumeIntegralInRange<uint64_t>(0, DWNX_MAX_VARINT);
 
   dwnx_conn *conn;
 
