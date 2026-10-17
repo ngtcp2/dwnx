@@ -45,7 +45,9 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_frame_encode_connection_close),
   munit_void_test(test_dwnx_frame_encode_qx_ping),
   munit_void_test(test_dwnx_frame_encode_padding),
+  munit_void_test(test_dwnx_frame_encode_datagram),
   munit_void_test(test_dwnx_frd_decode),
+  munit_void_test(test_dwnx_frame_datagram_framelen),
   munit_test_end(),
 };
 
@@ -856,6 +858,214 @@ void test_dwnx_frame_encode_padding(void) {
   assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
 }
 
+void test_dwnx_frame_encode_datagram(void) {
+  static const uint8_t data[] = "0123456789abcdef0";
+  uint8_t buf[256];
+  dwnx_vec datav, ndatav;
+  dwnx_vec datav2[2];
+  dwnx_frame_datagram fr;
+  dwnx_frame_datagram nfr = {
+    .data = &ndatav,
+  };
+  dwnx_ssize rv, nread;
+  dwnx_buf dbuf;
+  size_t framelen;
+  size_t i;
+
+  dwnx_buf_init(&dbuf, buf, sizeof(buf));
+
+  /* With length field */
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .data = &datav,
+    .datacnt = 1,
+  };
+  datav = (dwnx_vec){
+    .base = (uint8_t *)data,
+    .len = dwnx_strlen_lit(data),
+  };
+
+  framelen = 1 + 1 + dwnx_strlen_lit(data);
+
+  rv = dwnx_frame_encode_datagram(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_datagram(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.datacnt, ==, nfr.datacnt);
+  assert_memn_equal(fr.data[0].base, fr.data[0].len, nfr.data[0].base,
+                    nfr.data[0].len);
+
+  for (i = 1; i < framelen; ++i) {
+    nread = dwnx_frame_decode_datagram(&nfr, buf, i);
+
+    assert_ptrdiff(DWNX_ERR_FRAME_ENCODING, ==, nread);
+  }
+
+  rv = dwnx_frame_encode_datagram(buf, framelen - 1, &fr);
+
+  assert_ptrdiff(DWNX_ERR_NOBUF, ==, rv);
+
+  /* Without length field */
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM,
+    .data = &datav,
+    .datacnt = 1,
+  };
+  datav = (dwnx_vec){
+    .base = (uint8_t *)data,
+    .len = dwnx_strlen_lit(data),
+  };
+
+  framelen = 1 + dwnx_strlen_lit(data);
+
+  rv = dwnx_frame_encode_datagram(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_datagram(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.datacnt, ==, nfr.datacnt);
+  assert_memn_equal(fr.data[0].base, fr.data[0].len, nfr.data[0].base,
+                    nfr.data[0].len);
+
+  for (i = 1; i < framelen; ++i) {
+    nread = dwnx_frame_decode_datagram(&nfr, buf, i);
+
+    assert_ptrdiff((dwnx_ssize)i, ==, nread);
+    assert_uint64(fr.type, ==, nfr.type);
+
+    if (i == 1) {
+      assert_size(0, ==, nfr.datacnt);
+    } else {
+      assert_size(fr.datacnt, ==, nfr.datacnt);
+      assert_size(i - 1, ==, nfr.data[0].len);
+      assert_memory_equal(i - 1, fr.data[0].base, nfr.data[0].base);
+    }
+  }
+
+  /* Skip 0 length vector */
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .data = datav2,
+    .datacnt = 2,
+  };
+  datav2[0] = (dwnx_vec){0};
+  datav2[1] = (dwnx_vec){
+    .base = (uint8_t *)data,
+    .len = dwnx_strlen_lit(data),
+  };
+
+  framelen = 1 + 1 + dwnx_strlen_lit(data);
+
+  rv = dwnx_frame_encode_datagram(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_datagram(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_size(1, ==, nfr.datacnt);
+  assert_memn_equal(fr.data[1].base, fr.data[1].len, nfr.data[0].base,
+                    nfr.data[0].len);
+
+  for (i = 1; i < framelen; ++i) {
+    nread = dwnx_frame_decode_datagram(&nfr, buf, i);
+
+    assert_ptrdiff(DWNX_ERR_FRAME_ENCODING, ==, nread);
+  }
+
+  /* data span across 2 vectors */
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .data = datav2,
+    .datacnt = 2,
+  };
+  datav2[0] = (dwnx_vec){
+    .base = (uint8_t *)data,
+    .len = 5,
+  };
+  datav2[1] = (dwnx_vec){
+    .base = (uint8_t *)data + 5,
+    .len = dwnx_strlen_lit(data) - 5,
+  };
+
+  framelen = 1 + 1 + dwnx_strlen_lit(data);
+
+  rv = dwnx_frame_encode_datagram(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_datagram(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_size(1, ==, nfr.datacnt);
+  assert_size(dwnx_strlen_lit(data), ==, nfr.data[0].len);
+  assert_memn_equal(fr.data[0].base, fr.data[0].len, nfr.data[0].base,
+                    fr.data[0].len);
+  assert_memn_equal(fr.data[1].base, fr.data[1].len,
+                    nfr.data[0].base + fr.data[0].len,
+                    nfr.data[0].len - fr.data[0].len);
+
+  for (i = 1; i < framelen; ++i) {
+    nread = dwnx_frame_decode_datagram(&nfr, buf, i);
+
+    assert_ptrdiff(DWNX_ERR_FRAME_ENCODING, ==, nread);
+  }
+
+  /* length prematurely truncated */
+  dwnx_buf_reset(&dbuf);
+
+  dbuf.last = dwnx_put_uvarint(dbuf.last, DWNX_FRAME_DATAGRAM_LEN);
+  dwnx_put_uvarint(dbuf.last, 1000000009);
+  ++dbuf.last;
+
+  nread = dwnx_frame_decode_datagram(&nfr, dbuf.pos, dwnx_buf_len(&dbuf));
+
+  assert_ptrdiff(DWNX_ERR_FRAME_ENCODING, ==, nread);
+
+  /* empty DATAGRAM with length */
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+  };
+
+  framelen = 1 + 1;
+
+  rv = dwnx_frame_encode_datagram(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_datagram(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.datacnt, ==, nfr.datacnt);
+
+  /* empty DATAGRAM without length */
+  fr = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM,
+  };
+
+  framelen = 1;
+
+  rv = dwnx_frame_encode_datagram(buf, sizeof(buf), &fr);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, rv);
+
+  nread = dwnx_frame_decode_datagram(&nfr, buf, framelen);
+
+  assert_ptrdiff((dwnx_ssize)framelen, ==, nread);
+  assert_uint64(fr.type, ==, nfr.type);
+  assert_size(fr.datacnt, ==, nfr.datacnt);
+}
+
 void test_dwnx_frd_decode(void) {
   static const uint8_t reason[] = "reason";
   dwnx_frd frd;
@@ -1201,4 +1411,60 @@ void test_dwnx_frd_decode(void) {
   assert_int(0, ==, rv);
   assert_size(0, ==, dwnx_buf_len(&buf));
   assert_uint64(DWNX_FRAME_CONNECTION_CLOSE_APP, ==, nfr.hd.type);
+
+  /* DATAGRAM (length) */
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM_LEN,
+    .data =
+      &(dwnx_vec){
+        .base = nulldata,
+        .len = 111,
+      },
+    .datacnt = 1,
+  };
+
+  dwnx_buf_reset(&buf);
+  rv = dwnx_frame_encode_buf(&buf, &fr);
+
+  assert_int(0, ==, rv);
+
+  rv = dwnx_frd_decode_buf(&frd, &nfr, &buf);
+
+  assert_int(0, ==, rv);
+  assert_size(0, ==, dwnx_buf_len(&buf));
+  assert_uint64(DWNX_FRAME_DATAGRAM_LEN, ==, nfr.hd.type);
+  assert_size(fr.datagram.datacnt, ==, nfr.datagram.datacnt);
+  assert_memn_equal(fr.datagram.data[0].base, fr.datagram.data[0].len,
+                    nfr.datagram.data[0].base, nfr.datagram.data[0].len);
+
+  /* DATAGRAM */
+  fr.datagram = (dwnx_frame_datagram){
+    .type = DWNX_FRAME_DATAGRAM,
+    .data =
+      &(dwnx_vec){
+        .base = nulldata,
+        .len = 111,
+      },
+    .datacnt = 1,
+  };
+
+  dwnx_buf_reset(&buf);
+  rv = dwnx_frame_encode_buf(&buf, &fr);
+
+  assert_int(0, ==, rv);
+
+  rv = dwnx_frd_decode_buf(&frd, &nfr, &buf);
+
+  assert_int(0, ==, rv);
+  assert_size(0, ==, dwnx_buf_len(&buf));
+  assert_uint64(DWNX_FRAME_DATAGRAM, ==, nfr.hd.type);
+  assert_size(fr.datagram.datacnt, ==, nfr.datagram.datacnt);
+  assert_memn_equal(fr.datagram.data[0].base, fr.datagram.data[0].len,
+                    nfr.datagram.data[0].base, nfr.datagram.data[0].len);
+}
+
+void test_dwnx_frame_datagram_framelen(void) {
+  assert_size(2, ==, dwnx_frame_datagram_framelen(0));
+  assert_size(3, ==, dwnx_frame_datagram_framelen(1));
+  assert_size(67, ==, dwnx_frame_datagram_framelen(64));
 }

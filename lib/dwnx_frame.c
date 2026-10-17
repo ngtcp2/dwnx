@@ -69,6 +69,9 @@ dwnx_ssize dwnx_frame_encode(uint8_t *out, size_t outlen,
   case DWNX_FRAME_CONNECTION_CLOSE_APP:
     return dwnx_frame_encode_connection_close(out, outlen,
                                               &fr->connection_close);
+  case DWNX_FRAME_DATAGRAM:
+  case DWNX_FRAME_DATAGRAM_LEN:
+    return dwnx_frame_encode_datagram(out, outlen, &fr->datagram);
   default:
     dwnx_unreachable();
   }
@@ -407,6 +410,42 @@ dwnx_frame_encode_connection_close(uint8_t *out, size_t outlen,
   return (dwnx_ssize)len;
 }
 
+dwnx_ssize dwnx_frame_encode_datagram(uint8_t *out, size_t outlen,
+                                      const dwnx_frame_datagram *fr) {
+  size_t datalen = (size_t)dwnx_vec_len(fr->data, fr->datacnt);
+  size_t len = 1 + datalen;
+  uint8_t *p;
+  size_t i;
+
+  if (fr->type == DWNX_FRAME_DATAGRAM_LEN) {
+    len += dwnx_put_uvarintlen(datalen);
+  }
+
+  if (outlen < len) {
+    return DWNX_ERR_NOBUF;
+  }
+
+  p = out;
+
+  *p++ = (uint8_t)fr->type;
+
+  if (fr->type == DWNX_FRAME_DATAGRAM_LEN) {
+    p = dwnx_put_uvarint(p, (uint64_t)datalen);
+  }
+
+  for (i = 0; i < fr->datacnt; ++i) {
+    if (fr->data[i].len == 0) {
+      continue;
+    }
+
+    p = dwnx_cpymem(p, fr->data[i].base, fr->data[i].len);
+  }
+
+  assert((size_t)(p - out) == len);
+
+  return (dwnx_ssize)len;
+}
+
 void dwnx_frd_init(dwnx_frd *frd) { (void)frd; }
 
 int dwnx_frd_decode_buf(dwnx_frd *frd, dwnx_frame *dest, dwnx_buf *payload) {
@@ -466,6 +505,10 @@ dwnx_ssize dwnx_frd_decode(dwnx_frd *frd, dwnx_frame *dest,
   case DWNX_FRAME_CONNECTION_CLOSE_APP:
     return dwnx_frame_decode_connection_close(&dest->connection_close, payload,
                                               payloadlen);
+  case DWNX_FRAME_DATAGRAM:
+  case DWNX_FRAME_DATAGRAM_LEN:
+    dest->datagram.data = &frd->buf.data;
+    return dwnx_frame_decode_datagram(&dest->datagram, payload, payloadlen);
   default:
     if ((type & ~(DWNX_FRAME_STREAM - 1)) == DWNX_FRAME_STREAM) {
       dest->stream.data = &frd->buf.data;
@@ -1080,4 +1123,69 @@ dwnx_ssize dwnx_frame_decode_connection_close(dwnx_frame_connection_close *dest,
   assert((size_t)(p - payload) == len);
 
   return (dwnx_ssize)len;
+}
+
+dwnx_ssize dwnx_frame_decode_datagram(dwnx_frame_datagram *dest,
+                                      const uint8_t *payload,
+                                      size_t payloadlen) {
+  uint8_t type;
+  size_t len = 1;
+  const uint8_t *p;
+  size_t datalen;
+  size_t ndatalen;
+  uint64_t vi;
+
+  assert(payloadlen > 0);
+
+  p = payload;
+
+  type = *p++;
+
+  if (type == DWNX_FRAME_DATAGRAM_LEN) {
+    ++len;
+
+    if (payloadlen < len) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    ndatalen = dwnx_get_uvarintlen(p);
+    len += ndatalen - 1;
+
+    if (payloadlen < len) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    p = dwnx_get_uvarint(&vi, p);
+    if (payloadlen - len < vi) {
+      return DWNX_ERR_FRAME_ENCODING;
+    }
+
+    datalen = (size_t)vi;
+    len += datalen;
+  } else {
+    len = payloadlen;
+    datalen = payloadlen - (size_t)(p - payload);
+  }
+
+  dest->type = type;
+
+  if (datalen) {
+    *(dwnx_vec *)dest->data = (dwnx_vec){
+      .base = (uint8_t *)p,
+      .len = datalen,
+    };
+    dest->datacnt = 1;
+    p += datalen;
+  } else {
+    dest->datacnt = 0;
+  }
+
+  assert((size_t)(p - payload) == len);
+
+  return (dwnx_ssize)len;
+}
+
+size_t dwnx_frame_datagram_framelen(size_t datalen) {
+  /* Always encode length */
+  return 1 + dwnx_put_uvarintlen(datalen) + datalen;
 }
