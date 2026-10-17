@@ -625,6 +625,12 @@ typedef struct dwnx_transport_params {
    * :macro:`DWNX_DEFAULT_MAX_RECORD_SIZE`.
    */
   uint64_t max_record_size;
+  /**
+   * :member:`max_datagram_frame_size` is the maximum size of DATAGRAM
+   * frame that the local endpoint willingly receives.  Specifying 0
+   * disables DATAGRAM support.  See :rfc:`9221`.
+   */
+  uint64_t max_datagram_frame_size;
 } dwnx_transport_params;
 
 /**

@@ -64,6 +64,7 @@ void test_dwnx_transport_params_encode(void) {
     .initial_max_streams_uni = 16383,
     .max_idle_timeout = 16363 * DWNX_MILLISECONDS,
     .max_record_size = 5983223322,
+    .max_datagram_frame_size = 1000000021,
   };
 
   len =
@@ -82,7 +83,9 @@ void test_dwnx_transport_params_encode(void) {
     varint_paramlen(DWNX_TRANSPORT_PARAM_MAX_IDLE_TIMEOUT,
                     params.max_idle_timeout / DWNX_MILLISECONDS) +
     varint_paramlen(DWNX_TRANSPORT_PARAM_MAX_RECORD_SIZE,
-                    params.max_record_size);
+                    params.max_record_size) +
+    varint_paramlen(DWNX_TRANSPORT_PARAM_MAX_DATAGRAM_FRAME_SIZE,
+                    params.max_datagram_frame_size);
 
   nwrite = dwnx_transport_params_encode(NULL, 0, &params);
 
@@ -119,6 +122,8 @@ void test_dwnx_transport_params_encode(void) {
                 nparams.initial_max_streams_uni);
   assert_uint64(params.max_idle_timeout, ==, nparams.max_idle_timeout);
   assert_uint64(params.max_record_size, ==, nparams.max_record_size);
+  assert_uint64(params.max_datagram_frame_size, ==,
+                nparams.max_datagram_frame_size);
 }
 
 void test_dwnx_transport_params_decode(void) {

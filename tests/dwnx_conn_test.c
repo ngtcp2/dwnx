@@ -5610,8 +5610,9 @@ void test_dwnx_conn_encode_0rtt_transport_params(void) {
   dwnx_conn *conn;
   uint8_t buf[256];
   dwnx_tstamp ts = 0;
-  dwnx_transport_params remote_params, params;
+  dwnx_transport_params remote_params, local_params, params;
   dwnx_ssize nwrite;
+  conn_options opts;
   int rv;
 
   dwnx_transport_params_default(&remote_params);
@@ -5623,6 +5624,7 @@ void test_dwnx_conn_encode_0rtt_transport_params(void) {
   remote_params.initial_max_stream_data_uni = 99929324311;
   remote_params.initial_max_data = 4521373001;
   remote_params.max_idle_timeout = 300 * DWNX_MILLISECONDS;
+  remote_params.max_datagram_frame_size = 1000000021;
 
   /* client */
   setup_default_client(&conn);
@@ -5645,11 +5647,20 @@ void test_dwnx_conn_encode_0rtt_transport_params(void) {
                 params.initial_max_stream_data_bidi_remote);
   assert_uint64(remote_params.initial_max_data, ==, params.initial_max_data);
   assert_uint64(0, ==, params.max_idle_timeout);
+  assert_uint64(remote_params.max_datagram_frame_size, ==,
+                params.max_datagram_frame_size);
 
   dwnx_conn_del(conn);
 
   /* server */
-  setup_default_server(&conn);
+  server_default_transport_params(&local_params);
+  local_params.max_datagram_frame_size = 1000000021;
+
+  opts = (conn_options){
+    .params = &local_params,
+  };
+
+  setup_default_server_with_options(&conn, opts);
   dwnx_read_transport_params(conn, &remote_params, ts);
 
   nwrite = dwnx_conn_encode_0rtt_transport_params(conn, buf, sizeof(buf));
@@ -5672,6 +5683,8 @@ void test_dwnx_conn_encode_0rtt_transport_params(void) {
                 params.initial_max_data);
   assert_uint64(conn->local.transport_params.max_idle_timeout, ==,
                 params.max_idle_timeout);
+  assert_uint64(conn->local.transport_params.max_datagram_frame_size, ==,
+                params.max_datagram_frame_size);
 
   dwnx_conn_del(conn);
 }
@@ -5694,6 +5707,7 @@ void test_dwnx_conn_validate_early_transport_params(void) {
   early_params.initial_max_stream_data_bidi_remote = 84843434;
   early_params.initial_max_stream_data_uni = 99929324311;
   early_params.initial_max_data = 4521373001;
+  early_params.max_datagram_frame_size = 16999323;
 
   setup_default_client(&conn);
   dwnx_read_transport_params(conn, &early_params, ts);
@@ -5722,6 +5736,8 @@ void test_dwnx_conn_validate_early_transport_params(void) {
     conn->remote.transport_params.initial_max_stream_data_bidi_remote);
   assert_uint64(early_params.initial_max_data, ==,
                 conn->remote.transport_params.initial_max_data);
+  assert_uint64(early_params.max_datagram_frame_size, ==,
+                conn->remote.transport_params.max_datagram_frame_size);
 
   dwnx_read_transport_params(conn, &early_params, ++ts);
 
@@ -5822,6 +5838,23 @@ void test_dwnx_conn_validate_early_transport_params(void) {
 
   remote_params = early_params;
   --remote_params.initial_max_data;
+
+  rv = dwnx_conn_read_transport_params(conn, &remote_params, ts);
+
+  assert_int(DWNX_ERR_PROTO, ==, rv);
+
+  dwnx_conn_del(conn);
+
+  /* server reduced max_datagram_frame_size */
+  setup_default_client(&conn);
+
+  rv =
+    dwnx_conn_decode_and_set_0rtt_transport_params(conn, buf, (size_t)nwrite);
+
+  assert_int(0, ==, rv);
+
+  remote_params = early_params;
+  --remote_params.max_datagram_frame_size;
 
   rv = dwnx_conn_read_transport_params(conn, &remote_params, ts);
 

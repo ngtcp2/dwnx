@@ -59,6 +59,9 @@ typedef uint64_t dwnx_transport_param_id;
 /* QMux transport parameters */
 #define DWNX_TRANSPORT_PARAM_MAX_RECORD_SIZE 0x0571C59429CD0845ULL
 
+/* https://datatracker.ietf.org/doc/html/rfc9221 */
+#define DWNX_TRANSPORT_PARAM_MAX_DATAGRAM_FRAME_SIZE 0x20U
+
 /* DWNX_MAX_STREAMS is the maximum number of streams. */
 #define DWNX_MAX_STREAMS (1LL << 60)
 

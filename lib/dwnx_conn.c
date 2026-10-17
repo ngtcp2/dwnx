@@ -3159,6 +3159,7 @@ dwnx_ssize dwnx_conn_encode_0rtt_transport_params(const dwnx_conn *conn,
     src->initial_max_stream_data_bidi_remote;
   params.initial_max_stream_data_uni = src->initial_max_stream_data_uni;
   params.initial_max_data = src->initial_max_data;
+  params.max_datagram_frame_size = src->max_datagram_frame_size;
 
   if (conn->server) {
     params.max_idle_timeout = src->max_idle_timeout;
@@ -3204,6 +3205,7 @@ int dwnx_conn_set_0rtt_remote_transport_params(
     params->initial_max_stream_data_bidi_remote;
   p->initial_max_stream_data_uni = params->initial_max_stream_data_uni;
   p->initial_max_data = params->initial_max_data;
+  p->max_datagram_frame_size = params->max_datagram_frame_size;
 
   conn->tx.bidi.max_streams = p->initial_max_streams_bidi;
   conn->tx.uni.max_streams = p->initial_max_streams_uni;
@@ -3229,7 +3231,8 @@ int dwnx_conn_validate_early_transport_params(
         params->initial_max_stream_data_uni ||
       early_params->initial_max_streams_bidi >
         params->initial_max_streams_bidi ||
-      early_params->initial_max_streams_uni > params->initial_max_streams_uni) {
+      early_params->initial_max_streams_uni > params->initial_max_streams_uni ||
+      early_params->max_datagram_frame_size > params->max_datagram_frame_size) {
     return DWNX_ERR_PROTO;
   }
 
