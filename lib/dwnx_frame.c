@@ -412,13 +412,14 @@ dwnx_frame_encode_connection_close(uint8_t *out, size_t outlen,
 
 dwnx_ssize dwnx_frame_encode_datagram(uint8_t *out, size_t outlen,
                                       const dwnx_frame_datagram *fr) {
-  size_t datalen = (size_t)dwnx_vec_len(fr->data, fr->datacnt);
-  size_t len = 1 + datalen;
+  size_t len = 1 + fr->len;
   uint8_t *p;
   size_t i;
 
+  assert(fr->len == (size_t)dwnx_vec_len(fr->data, fr->datacnt));
+
   if (fr->type == DWNX_FRAME_DATAGRAM_LEN) {
-    len += dwnx_put_uvarintlen(datalen);
+    len += dwnx_put_uvarintlen(fr->len);
   }
 
   if (outlen < len) {
@@ -430,7 +431,7 @@ dwnx_ssize dwnx_frame_encode_datagram(uint8_t *out, size_t outlen,
   *p++ = (uint8_t)fr->type;
 
   if (fr->type == DWNX_FRAME_DATAGRAM_LEN) {
-    p = dwnx_put_uvarint(p, (uint64_t)datalen);
+    p = dwnx_put_uvarint(p, (uint64_t)fr->len);
   }
 
   for (i = 0; i < fr->datacnt; ++i) {
@@ -1175,8 +1176,10 @@ dwnx_ssize dwnx_frame_decode_datagram(dwnx_frame_datagram *dest,
       .len = datalen,
     };
     dest->datacnt = 1;
+    dest->len = datalen;
     p += datalen;
   } else {
+    dest->len = 0;
     dest->datacnt = 0;
   }
 

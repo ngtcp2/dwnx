@@ -56,6 +56,7 @@ static const MunitTest tests[] = {
   munit_void_test(test_dwnx_conn_extend_max_offset),
   munit_void_test(test_dwnx_conn_extend_max_streams),
   munit_void_test(test_dwnx_conn_writev_stream),
+  munit_void_test(test_dwnx_conn_writev_datagram),
   munit_void_test(test_dwnx_conn_send_stream_data_blocked),
   munit_void_test(test_dwnx_conn_handle_expiry),
   munit_void_test(test_dwnx_conn_write_connection_close),
@@ -3420,6 +3421,10 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
                                   DWNX_WRITE_STREAM_FLAG_FIN, stream_id, NULL,
                                   0, ++ts);
 
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
+
+  nwrite = dwnx_conn_write_record(conn, outbuf, sizeof(outbuf), ++ts);
+
   assert_ptrdiff(0, <, nwrite);
 
   fr[0].stream = (dwnx_frame_stream){
@@ -3464,6 +3469,10 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   nwrite = dwnx_conn_write_stream(conn, outbuf, sizeof(outbuf), NULL,
                                   DWNX_WRITE_STREAM_FLAG_FIN, stream_id, NULL,
                                   0, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
+
+  nwrite = dwnx_conn_write_record(conn, outbuf, sizeof(outbuf), ++ts);
 
   assert_ptrdiff(0, <, nwrite);
 
@@ -3630,6 +3639,10 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
                                   DWNX_WRITE_STREAM_FLAG_FIN, stream_id, NULL,
                                   0, ++ts);
 
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
+
+  nwrite = dwnx_conn_write_record(conn, outbuf, sizeof(outbuf), ++ts);
+
   assert_ptrdiff(0, <, nwrite);
 
   fr[0].reset_stream = (dwnx_frame_reset_stream){
@@ -3677,8 +3690,12 @@ void test_dwnx_conn_recv_stream_data_blocked(void) {
   nwrite = dwnx_conn_write_stream(conn, outbuf, sizeof(outbuf), NULL,
                                   DWNX_WRITE_STREAM_FLAG_FIN, 0, NULL, 0, ++ts);
 
-  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
   assert_null(dwnx_conn_find_stream(conn, 0));
+
+  nwrite = dwnx_conn_write_record(conn, outbuf, sizeof(outbuf), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
 
   fr[0].stream_data_blocked = (dwnx_frame_stream_data_blocked){
     .type = DWNX_FRAME_STREAM_DATA_BLOCKED,
@@ -5129,6 +5146,198 @@ void test_dwnx_conn_writev_stream(void) {
   dwnx_conn_del(conn);
 }
 
+void test_dwnx_conn_writev_datagram(void) {
+  static const dwnx_transport_params remote_params = {
+    .initial_max_streams_bidi = 100,
+    .initial_max_streams_uni = 100,
+    .initial_max_stream_data_bidi_local = 64 * 1024,
+    .initial_max_stream_data_bidi_remote = 64 * 1024,
+    .initial_max_stream_data_uni = 64 * 1024,
+    .initial_max_data = 128 * 1024,
+    .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
+    .max_datagram_frame_size = 65535,
+  };
+  dwnx_conn *conn;
+  uint8_t rawbuf[16384];
+  dwnx_buf buf;
+  dwnx_frd frd;
+  dwnx_frame fr;
+  dwnx_tstamp ts = 0;
+  dwnx_ssize nwrite;
+  dwnx_vec datav[2];
+  int accepted;
+  int rv;
+
+  dwnx_buf_init(&buf, rawbuf, sizeof(rawbuf));
+  dwnx_frd_init(&frd);
+
+  /* Write DATAGRAM that just fits the entire record payload */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  nwrite = dwnx_conn_write_record(conn, buf.last, dwnx_buf_left(&buf), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  nwrite = dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf),
+                                    &accepted, DWNX_WRITE_DATAGRAM_FLAG_NONE,
+                                    nulldata, 16379, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_true(accepted);
+
+  buf.last += nwrite;
+
+  dwnx_read_recordlen(&buf);
+
+  rv = dwnx_frd_decode_buf(&frd, &fr, &buf);
+
+  assert_int(0, ==, rv);
+  assert_size(0, ==, dwnx_buf_len(&buf));
+  assert_uint64(DWNX_FRAME_DATAGRAM_LEN, ==, fr.hd.type);
+  assert_size(16379, ==, fr.datagram.len);
+
+  dwnx_conn_del(conn);
+
+  /* Write 2 DATAGRAM frames in a same QMux record */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_record(conn, buf.last, dwnx_buf_left(&buf), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  nwrite = dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf),
+                                    &accepted, DWNX_WRITE_DATAGRAM_FLAG_NONE,
+                                    nulldata, 100, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
+  assert_true(accepted);
+
+  nwrite =
+    dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf), &accepted,
+                             DWNX_WRITE_DATAGRAM_FLAG_NONE, nulldata, 99, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
+  assert_true(accepted);
+
+  nwrite = dwnx_conn_write_record(conn, buf.last, dwnx_buf_left(&buf), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+
+  buf.last += nwrite;
+
+  dwnx_read_recordlen(&buf);
+
+  rv = dwnx_frd_decode_buf(&frd, &fr, &buf);
+
+  assert_int(0, ==, rv);
+  assert_size(0, <, dwnx_buf_len(&buf));
+  assert_uint64(DWNX_FRAME_DATAGRAM_LEN, ==, fr.hd.type);
+  assert_size(100, ==, fr.datagram.len);
+
+  rv = dwnx_frd_decode_buf(&frd, &fr, &buf);
+
+  assert_int(0, ==, rv);
+  assert_size(0, ==, dwnx_buf_len(&buf));
+  assert_uint64(DWNX_FRAME_DATAGRAM_LEN, ==, fr.hd.type);
+  assert_size(99, ==, fr.datagram.len);
+
+  dwnx_conn_del(conn);
+
+  /* Could not write DATAGRAM because there are enough room left in a
+     current QMux record */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf),
+                                    &accepted, DWNX_WRITE_DATAGRAM_FLAG_NONE,
+                                    nulldata, 16379, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_false(accepted);
+
+  buf.last += nwrite;
+
+  dwnx_read_recordlen(&buf);
+
+  rv = dwnx_frd_decode_buf(&frd, &fr, &buf);
+
+  assert_int(0, ==, rv);
+  assert_size(0, ==, dwnx_buf_len(&buf));
+  assert_uint64(DWNX_FRAME_QX_TRANSPORT_PARAMETERS, ==, fr.hd.type);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf),
+                                    &accepted, DWNX_WRITE_DATAGRAM_FLAG_NONE,
+                                    nulldata, 16379, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
+  assert_true(accepted);
+
+  buf.last += nwrite;
+
+  dwnx_read_recordlen(&buf);
+
+  rv = dwnx_frd_decode_buf(&frd, &fr, &buf);
+
+  assert_int(0, ==, rv);
+  assert_size(0, ==, dwnx_buf_len(&buf));
+  assert_uint64(DWNX_FRAME_DATAGRAM_LEN, ==, fr.hd.type);
+  assert_size(16379, ==, fr.datagram.len);
+
+  dwnx_conn_del(conn);
+
+  /* Try to send DATAGRAM to the remote endpoint which does not
+     support */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &default_remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf), &accepted,
+                             DWNX_WRITE_DATAGRAM_FLAG_NONE, nulldata, 10, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_INVALID_STATE, ==, nwrite);
+
+  dwnx_conn_del(conn);
+
+  /* DATAGRAM size exceeds MAX_VARINT (or SIZE_MAX) */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  datav[0] = (dwnx_vec){
+    .len = (size_t)dwnx_min((uint64_t)SIZE_MAX, DWNX_MAX_VARINT),
+  };
+  datav[1] = (dwnx_vec){
+    .len = 1,
+  };
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_writev_datagram(conn, buf.last, dwnx_buf_left(&buf),
+                                     &accepted, DWNX_WRITE_DATAGRAM_FLAG_NONE,
+                                     datav, dwnx_arraylen(datav), ++ts);
+
+  assert_ptrdiff(DWNX_ERR_INVALID_ARGUMENT, ==, nwrite);
+
+  dwnx_conn_del(conn);
+
+  /* DATAGRAM size exceeds the limit that the remote endpoint
+     declares */
+  setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite = dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf),
+                                    &accepted, DWNX_WRITE_DATAGRAM_FLAG_NONE,
+                                    nulldata, 65531, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_INVALID_ARGUMENT, ==, nwrite);
+
+  dwnx_conn_del(conn);
+}
+
 void test_dwnx_conn_send_stream_data_blocked(void) {
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
@@ -5165,8 +5374,12 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
                                   DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
                                   nulldata, sizeof(nulldata), ++ts);
 
-  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(DWNX_ERR_STREAM_DATA_BLOCKED, ==, nwrite);
   assert_ptrdiff(-1, ==, datalen);
+
+  nwrite = dwnx_conn_write_record(conn, buf.last, dwnx_buf_left(&buf), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
   dwnx_read_recordlen(&buf);
@@ -5217,8 +5430,12 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
                                   DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
                                   nulldata, sizeof(nulldata), ++ts);
 
-  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
   assert_ptrdiff(77, ==, datalen);
+
+  nwrite = dwnx_conn_write_record(conn, buf.last, dwnx_buf_left(&buf), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
   dwnx_read_recordlen(&buf);
@@ -5348,8 +5565,12 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
                                   DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
                                   nulldata, sizeof(nulldata), ++ts);
 
-  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
   assert_ptrdiff(77, ==, datalen);
+
+  nwrite = dwnx_conn_write_record(conn, buf.last, 87, ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
   dwnx_read_recordlen(&buf);
@@ -5380,8 +5601,12 @@ void test_dwnx_conn_send_stream_data_blocked(void) {
                                   DWNX_WRITE_STREAM_FLAG_NONE, stream_id,
                                   nulldata, sizeof(nulldata), ++ts);
 
-  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(DWNX_ERR_STREAM_DATA_BLOCKED, ==, nwrite);
   assert_ptrdiff(-1, ==, datalen);
+
+  nwrite = dwnx_conn_write_record(conn, buf.last, dwnx_buf_left(&buf), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
 
   buf.last += nwrite;
   dwnx_read_recordlen(&buf);
@@ -5972,8 +6197,12 @@ void test_dwnx_conn_tls_early_data_rejected(void) {
   nwrite = dwnx_conn_write_stream(conn, buf.last, dwnx_buf_left(&buf),
                                   &ndatalen, DWNX_WRITE_STREAM_FLAG_NONE,
                                   stream_id, nulldata, sizeof(nulldata), ++ts);
-  assert_ptrdiff(0, <, nwrite);
+  assert_ptrdiff(DWNX_ERR_WRITE_MORE, ==, nwrite);
   assert_ptrdiff(0, <, ndatalen);
+
+  nwrite = dwnx_conn_write_record(conn, buf.last, dwnx_buf_left(&buf), ++ts);
+
+  assert_ptrdiff(0, <, nwrite);
 
   rv = dwnx_conn_shutdown_stream_write(conn, 0, stream_id, DWNX_NO_ERROR);
 

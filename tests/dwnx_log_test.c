@@ -555,6 +555,46 @@ void test_dwnx_log_fr(void) {
                        });
 
   assert_null(ld.expected[ld.idx]);
+
+  /* DATAGRAM (length) */
+  ld = (log_data){
+    .expected =
+      {
+        "I00001123 0x00000000deadbeef frm rx DATAGRAM(0x31) len=1111",
+      },
+  };
+
+  log_init(&log, &ld);
+
+  dwnx_log_rx_fr(&log, &(dwnx_frame){
+                         .datagram =
+                           {
+                             .type = DWNX_FRAME_DATAGRAM_LEN,
+                             .len = 1111,
+                           },
+                       });
+
+  assert_null(ld.expected[ld.idx]);
+
+  /* DATAGRAM */
+  ld = (log_data){
+    .expected =
+      {
+        "I00001123 0x00000000deadbeef frm rx DATAGRAM(0x30) len=1111",
+      },
+  };
+
+  log_init(&log, &ld);
+
+  dwnx_log_rx_fr(&log, &(dwnx_frame){
+                         .datagram =
+                           {
+                             .type = DWNX_FRAME_DATAGRAM,
+                             .len = 1111,
+                           },
+                       });
+
+  assert_null(ld.expected[ld.idx]);
 }
 
 void test_dwnx_log_rcd(void) {
