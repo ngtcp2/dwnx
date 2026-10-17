@@ -966,6 +966,23 @@ typedef int (*dwnx_write_stream_data_offset)(dwnx_conn *conn, int64_t stream_id,
                                              void *stream_user_data);
 
 /**
+ * @functypedef
+ *
+ * :type:`dwnx_recv_datagram` is a callback function which is invoked
+ * when an entire or partial datagram is received.  |fin| is nonzero
+ * if this is the last part of the datagram.  |dgramlen| is the size
+ * of entire datagram.  |offset| is the offset where this data is
+ * positioned at.  |datalen| is the length of |data|.
+ *
+ * The callback function must return 0 if it succeeds.  Returning
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE` makes the library call return
+ * immediately.
+ */
+typedef int (*dwnx_recv_datagram)(dwnx_conn *conn, int fin, size_t dgramlen,
+                                  size_t offset, const uint8_t *data,
+                                  size_t datalen, void *user_data);
+
+/**
  * @struct
  *
  * :type:`dwnx_callbacks` holds a set of callback functions.
@@ -1060,6 +1077,12 @@ typedef struct dwnx_callbacks {
    * function is optional.
    */
   dwnx_write_stream_data_offset write_stream_data_offset;
+  /**
+   * :member:`recv_datagram` is a callback function which is invoked
+   * when an entire or partial datagram is received.  This callback is
+   * optional.
+   */
+  dwnx_recv_datagram recv_datagram;
 } dwnx_callbacks;
 
 /**

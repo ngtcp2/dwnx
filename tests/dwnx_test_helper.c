@@ -148,6 +148,16 @@ void dwnx_write_frame(dwnx_buf *dest, const dwnx_frame *fr) {
                              fr->connection_close.reasonlen);
 
     return;
+  case DWNX_FRAME_DATAGRAM:
+    dest->last = dwnx_put_uvarint(dest->last, fr->datagram.type);
+    dest->last = dwnx_setmem(dest->last, 0, fr->datagram.len);
+    return;
+  case DWNX_FRAME_DATAGRAM_LEN:
+    dest->last = dwnx_put_uvarint(dest->last, fr->datagram.type);
+    dest->last = dwnx_put_uvarint(dest->last, fr->datagram.len);
+    dest->last = dwnx_setmem(dest->last, 0, fr->datagram.len);
+
+    return;
   default:
     dwnx_unreachable();
   }

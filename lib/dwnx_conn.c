@@ -294,6 +294,24 @@ static int conn_call_write_stream_data_offset(dwnx_conn *conn,
   return 0;
 }
 
+static int conn_call_recv_datagram(dwnx_conn *conn, int fin, size_t dgramlen,
+                                   size_t offset, const uint8_t *data,
+                                   size_t datalen) {
+  int rv;
+
+  if (!conn->callbacks.recv_datagram) {
+    return 0;
+  }
+
+  rv = conn->callbacks.recv_datagram(conn, fin, dgramlen, offset, data, datalen,
+                                     conn->user_data);
+  if (rv != 0) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
+
+  return 0;
+}
+
 static int cycle_less(const dwnx_pq_entry *lhs, const dwnx_pq_entry *rhs) {
   dwnx_strm *ls = dwnx_struct_of(lhs, dwnx_strm, pe);
   dwnx_strm *rs = dwnx_struct_of(rhs, dwnx_strm, pe);
@@ -1246,6 +1264,13 @@ static int conn_recv_stream_data_blocked(
   return 0;
 }
 
+static int conn_recv_datagram(dwnx_conn *conn, int fin, size_t dgramlen,
+                              size_t offset, const uint8_t *data,
+                              size_t datalen, dwnx_tstamp ts) {
+  (void)ts;
+  return conn_call_recv_datagram(conn, fin, dgramlen, offset, data, datalen);
+}
+
 int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
                    dwnx_tstamp ts) {
   const uint8_t *p, *end;
@@ -1448,6 +1473,42 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
         rcrd->fr.connection_close.type = vint;
         rcrd->state = DWNX_RECORD_READ_STATE_CONNECTION_CLOSE_ERROR_CODE;
+
+        break;
+      case DWNX_FRAME_DATAGRAM:
+        if (conn->local.transport_params.max_datagram_frame_size == 0 ||
+            conn->local.transport_params.max_datagram_frame_size <
+              rcrd->record_left) {
+          return DWNX_ERR_PROTO;
+        }
+
+        rcrd->fr.datagram.type = vint;
+        rcrd->fr.datagram.len = rcrd->record_left;
+
+        if (rcrd->record_left == 0) {
+          rv = conn_recv_datagram(conn, /* fin = */ 1, 0, 0, NULL, 0, ts);
+          if (rv != 0) {
+            return rv;
+          }
+
+          goto frame_done;
+        }
+
+        rcrd->field_left = rcrd->fr.datagram.len;
+        rcrd->state = DWNX_RECORD_READ_STATE_DATAGRAM_DATA;
+
+        break;
+      case DWNX_FRAME_DATAGRAM_LEN:
+        if (conn->local.transport_params.max_datagram_frame_size == 0) {
+          return DWNX_ERR_PROTO;
+        }
+
+        if (rcrd->record_left == 0) {
+          return DWNX_ERR_FRAME_ENCODING;
+        }
+
+        rcrd->fr.datagram.type = vint;
+        rcrd->state = DWNX_RECORD_READ_STATE_DATAGRAM_LEN;
 
         break;
       default:
@@ -2212,6 +2273,71 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       rcrd->state = DWNX_RECORD_READ_STATE_DRAINING;
 
       return DWNX_ERR_DRAINING;
+    case DWNX_RECORD_READ_STATE_DATAGRAM_LEN:
+      len = dwnx_record_reader_avail(rcrd, (size_t)(end - p));
+      nread = dwnx_varint_reader_read(vird, p, len, rcrd->record_left == len);
+      if (nread < 0) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      p += nread;
+      rcrd->record_left -= (size_t)nread;
+
+      if (!dwnx_varint_reader_done(vird)) {
+        return 0;
+      }
+
+      vint = vird->acc;
+      dwnx_varint_reader_reset(vird);
+
+      if (vint > conn->local.transport_params.max_datagram_frame_size) {
+        return DWNX_ERR_PROTO;
+      }
+
+      if (vint > rcrd->record_left) {
+        return DWNX_ERR_FRAME_ENCODING;
+      }
+
+      rcrd->fr.datagram.len = (size_t)vint;
+      rcrd->field_left = rcrd->fr.datagram.len;
+
+      dwnx_log_rx_fr(&conn->log, &rcrd->fr);
+
+      if (rcrd->field_left == 0) {
+        rv = conn_recv_datagram(conn, /* fin = */ 1, 0, 0, NULL, 0, ts);
+        if (rv != 0) {
+          return rv;
+        }
+
+        goto frame_done;
+      }
+
+      rcrd->state = DWNX_RECORD_READ_STATE_DATAGRAM_DATA;
+
+      if (p == end) {
+        return 0;
+      }
+
+      /* Fall through */
+    case DWNX_RECORD_READ_STATE_DATAGRAM_DATA:
+      len = dwnx_record_reader_field_avail(rcrd, (size_t)(end - p));
+
+      rv = conn_recv_datagram(
+        conn, rcrd->field_left == len, rcrd->fr.datagram.len,
+        rcrd->fr.datagram.len - rcrd->field_left, p, len, ts);
+      if (rv != 0) {
+        return rv;
+      }
+
+      p += len;
+      rcrd->record_left -= len;
+      rcrd->field_left -= len;
+
+      if (rcrd->field_left) {
+        return 0;
+      }
+
+      goto frame_done;
     case DWNX_RECORD_READ_STATE_DRAINING:
       return DWNX_ERR_DRAINING;
     case DWNX_RECORD_READ_STATE_CLOSING:
