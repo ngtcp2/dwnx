@@ -1157,7 +1157,18 @@ DWNX_EXTERN void dwnx_conn_del(dwnx_conn *conn);
  * This function returns 0 if it succeeds, or one of the following
  * negative error codes:
  *
- * TBD
+ * :macro:`DWNX_ERR_NOMEM`
+ *     Out of memory.
+ * :macro:`DWNX_ERR_CALLBACK_FAILURE`
+ *     User callback failed.
+ * :macro:`DWNX_ERR_FRAME_ENCODING`
+ *     The QUIC frame was encoded badly and could not be parsed.
+ * :macro:`DWNX_ERR_PROTO`
+ *     General protocol error.
+ * :macro:`DWNX_ERR_DRAINING`
+ *     The connection is in draining period.
+ * :macro:`DWNX_ERR_CLOSING`
+ *     The connection is in closing period.
  *
  * In general, when one of negative error codes is returned, the QMux
  * connection must be closed, and |conn| must be deleted by
