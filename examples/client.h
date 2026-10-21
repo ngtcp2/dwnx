@@ -111,7 +111,7 @@ public:
   std::expected<void, Error>
   on_stream_close(int64_t stream_id, std::optional<uint64_t> rx_app_error_code,
                   std::optional<uint64_t> tx_app_error_code);
-  void on_extend_max_streams();
+  std::expected<void, Error> on_extend_max_streams();
   std::expected<void, Error> handle_error();
   std::expected<void, Error> make_stream_early();
 
