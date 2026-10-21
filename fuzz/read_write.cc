@@ -181,9 +181,9 @@ dwnx_conn *setup_conn(FuzzedDataProvider &fdp, const dwnx_mem &mem) {
   params.initial_max_data =
     fdp.ConsumeIntegralInRange<uint64_t>(0, DWNX_MAX_VARINT);
   params.initial_max_streams_bidi =
-    fdp.ConsumeIntegralInRange<uint64_t>(0, DWNX_MAX_VARINT);
+    fdp.ConsumeIntegralInRange<uint64_t>(0, 1ULL << 60);
   params.initial_max_streams_uni =
-    fdp.ConsumeIntegralInRange<uint64_t>(0, DWNX_MAX_VARINT);
+    fdp.ConsumeIntegralInRange<uint64_t>(0, 1ULL << 60);
   params.max_idle_timeout =
     fdp.ConsumeIntegralInRange<uint64_t>(0, DWNX_MAX_VARINT);
   params.max_record_size = fdp.ConsumeIntegralInRange<uint64_t>(
