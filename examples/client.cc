@@ -1022,6 +1022,10 @@ std::expected<void, Error> Client::make_stream_early() {
 std::expected<void, Error> Client::on_extend_max_streams() {
   int64_t stream_id;
 
+  if (config.requests.empty()) {
+    return {};
+  }
+
   for (; nstreams_done_ < config.nstreams; ++nstreams_done_) {
     if (auto rv = dwnx_conn_open_bidi_stream(conn_, &stream_id, nullptr);
         rv != 0) {
