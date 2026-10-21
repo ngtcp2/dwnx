@@ -39,6 +39,8 @@ typedef struct dwnx_mem dwnx_mem;
 typedef struct dwnx_varint_reader {
   uint64_t acc;
   size_t left;
+  /* vlen is the encoded length of varint */
+  size_t vlen;
 } dwnx_varint_reader;
 
 void dwnx_varint_reader_reset(dwnx_varint_reader *vird);
@@ -89,6 +91,9 @@ typedef struct dwnx_record_reader {
   dwnx_record_read_state state;
   /* fr is the frame currently received. */
   dwnx_frame fr;
+  /* typelen is the encoded length of the frame type which is
+     varint */
+  size_t typelen;
   /* record_left is the number of bytes left in the current record. */
   size_t record_left;
   /* field_left is the number of bytes left in the field currently

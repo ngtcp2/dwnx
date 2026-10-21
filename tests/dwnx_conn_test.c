@@ -4663,7 +4663,7 @@ void test_dwnx_conn_recv_datagram(void) {
 
   fr.datagram = (dwnx_frame_datagram){
     .type = DWNX_FRAME_DATAGRAM_LEN,
-    .len = 1001,
+    .len = 1000 - /* type = */ 1 - /* length = */ 2 + 1,
   };
 
   dwnx_buf_reset(&buf);
@@ -4801,7 +4801,7 @@ void test_dwnx_conn_recv_datagram(void) {
 
   fr.datagram = (dwnx_frame_datagram){
     .type = DWNX_FRAME_DATAGRAM,
-    .len = 1001,
+    .len = 1000 - /* type = */ 1 + 1,
   };
 
   dwnx_buf_reset(&buf);
