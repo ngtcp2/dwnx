@@ -350,7 +350,9 @@ int extend_max_local_streams_bidi(dwnx_conn *conn, uint64_t max_streams,
                                   void *user_data) {
   auto c = static_cast<Client *>(user_data);
 
-  c->on_extend_max_streams();
+  if (!c->on_extend_max_streams()) {
+    return DWNX_ERR_CALLBACK_FAILURE;
+  }
 
   return 0;
 }
@@ -1014,13 +1016,15 @@ std::expected<void, Error> Client::make_stream_early() {
     return rv;
   }
 
-  on_extend_max_streams();
-
-  return {};
+  return on_extend_max_streams();
 }
 
-void Client::on_extend_max_streams() {
+std::expected<void, Error> Client::on_extend_max_streams() {
   int64_t stream_id;
+
+  if (config.requests.empty()) {
+    return {};
+  }
 
   for (; nstreams_done_ < config.nstreams; ++nstreams_done_) {
     if (auto rv = dwnx_conn_open_bidi_stream(conn_, &stream_id, nullptr);
@@ -1032,8 +1036,8 @@ void Client::on_extend_max_streams() {
     auto stream = std::make_unique<Stream>(
       config.requests[nstreams_done_ % config.requests.size()], stream_id);
 
-    if (!proto_codec_->submit_request(stream.get())) {
-      break;
+    if (auto rv = proto_codec_->submit_request(stream.get()); !rv) {
+      return rv;
     }
 
     if (!config.download.empty()) {
@@ -1045,6 +1049,8 @@ void Client::on_extend_max_streams() {
       assert(0);
     }
   }
+
+  return {};
 }
 
 std::expected<void, Error>

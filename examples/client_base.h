@@ -127,9 +127,6 @@ struct Config {
   bool exit_on_all_streams_close{};
   // disable_early_data disables early data.
   bool disable_early_data{};
-  // static_secret is used to derive keying materials for Stateless
-  // Retry token.
-  std::array<uint8_t, 32> static_secret;
   // sni is the value sent in TLS SNI, overriding DNS name of the
   // remote host.
   std::string_view sni;
