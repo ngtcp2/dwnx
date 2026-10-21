@@ -1282,6 +1282,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
   int rv;
   uint8_t *buf;
   size_t len;
+  size_t vlen;
   uint64_t vint;
 
   conn_update_timestamp(conn, ts);
@@ -1346,6 +1347,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return 0;
       }
 
+      rcrd->typelen = vird->vlen;
       vint = vird->acc;
       dwnx_varint_reader_reset(vird);
 
@@ -1478,7 +1480,7 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
       case DWNX_FRAME_DATAGRAM:
         if (conn->local.transport_params.max_datagram_frame_size == 0 ||
             conn->local.transport_params.max_datagram_frame_size <
-              rcrd->record_left) {
+              rcrd->typelen + rcrd->record_left) {
           return DWNX_ERR_PROTO;
         }
 
@@ -1499,7 +1501,8 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
 
         break;
       case DWNX_FRAME_DATAGRAM_LEN:
-        if (conn->local.transport_params.max_datagram_frame_size == 0) {
+        if (conn->local.transport_params.max_datagram_frame_size <=
+            rcrd->typelen) {
           return DWNX_ERR_PROTO;
         }
 
@@ -2287,10 +2290,12 @@ int dwnx_conn_read(dwnx_conn *conn, const uint8_t *data, size_t datalen,
         return 0;
       }
 
+      vlen = vird->vlen;
       vint = vird->acc;
       dwnx_varint_reader_reset(vird);
 
-      if (vint > conn->local.transport_params.max_datagram_frame_size) {
+      if (rcrd->typelen + vlen + vint >
+          conn->local.transport_params.max_datagram_frame_size) {
         return DWNX_ERR_PROTO;
       }
 

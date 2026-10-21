@@ -39,7 +39,7 @@ void dwnx_varint_reader_reset(dwnx_varint_reader *vird) {
 dwnx_ssize dwnx_varint_reader_read(dwnx_varint_reader *vird,
                                    const uint8_t *data, size_t datalen,
                                    int fin) {
-  size_t len, vlen;
+  size_t len;
   uint8_t *p;
   const uint8_t *begin = data, *end = data + datalen;
 
@@ -47,22 +47,23 @@ dwnx_ssize dwnx_varint_reader_read(dwnx_varint_reader *vird,
 
   if (vird->left == 0) {
     assert(vird->acc == 0);
+    assert(vird->vlen == 0);
 
-    vlen = dwnx_get_uvarintlen(begin);
-    len = dwnx_min(vlen, (size_t)(end - begin));
-    if (vlen <= len) {
+    vird->vlen = dwnx_get_uvarintlen(begin);
+    len = dwnx_min(vird->vlen, (size_t)(end - begin));
+    if (vird->vlen <= len) {
       dwnx_get_uvarint(&vird->acc, begin);
-      return (dwnx_ssize)vlen;
+      return (dwnx_ssize)vird->vlen;
     }
 
     if (fin) {
       return DWNX_ERR_INVALID_ARGUMENT;
     }
 
-    p = (uint8_t *)&vird->acc + (sizeof(vird->acc) - vlen);
+    p = (uint8_t *)&vird->acc + (sizeof(vird->acc) - vird->vlen);
     memcpy(p, begin, len);
     *p &= 0x3FU;
-    vird->left = vlen - len;
+    vird->left = vird->vlen - len;
 
     return (dwnx_ssize)len;
   }
@@ -89,6 +90,7 @@ static void record_reader_next_frame(dwnx_record_reader *rcrd,
   }
 
   rcrd->state = DWNX_RECORD_READ_STATE_FRAME_TYPE;
+  rcrd->typelen = 0;
   rcrd->field_left = 0;
 }
 
