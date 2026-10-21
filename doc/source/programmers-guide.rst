@@ -58,7 +58,7 @@ server to create a stream and send data:
 - :member:`dwnx_transport_params.initial_max_streams_uni`
 
 :member:`dwnx_transport_params.max_record_size` is basically ignored,
-and the library always uses 16384.
+and the library always uses 16382.
 
 Read the transport data
 -----------------------
