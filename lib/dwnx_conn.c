@@ -693,7 +693,10 @@ static int conn_recv_transport_params(dwnx_conn *conn, const uint8_t *data,
 
   if (!conn->server) {
     /* Increase max stream data for streams created in early data. */
-    dwnx_map_each(&conn->strms, set_max_stream_offset, conn);
+    rv = dwnx_map_each(&conn->strms, set_max_stream_offset, conn);
+    if (rv != 0) {
+      return rv;
+    }
   }
 
   rv = conn_call_recv_transport_params(conn, remote_params);
