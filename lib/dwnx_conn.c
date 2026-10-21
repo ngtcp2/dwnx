@@ -2782,7 +2782,8 @@ dwnx_ssize dwnx_conn_writev_datagram(dwnx_conn *conn, uint8_t *dest,
     return DWNX_ERR_INVALID_ARGUMENT;
   }
 
-  if (conn->remote.transport_params.max_datagram_frame_size <
+  if (dwnx_min(conn->remote.transport_params.max_datagram_frame_size,
+               DWNX_DEFAULT_MAX_RECORD_SIZE) <
       dwnx_frame_datagram_framelen((size_t)datalen)) {
     return DWNX_ERR_INVALID_ARGUMENT;
   }

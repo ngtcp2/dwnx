@@ -5522,6 +5522,16 @@ void test_dwnx_conn_writev_datagram(void) {
     .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
     .max_datagram_frame_size = 65535,
   };
+  static const dwnx_transport_params small_remote_params = {
+    .initial_max_streams_bidi = 100,
+    .initial_max_streams_uni = 100,
+    .initial_max_stream_data_bidi_local = 64 * 1024,
+    .initial_max_stream_data_bidi_remote = 64 * 1024,
+    .initial_max_stream_data_uni = 64 * 1024,
+    .initial_max_data = 128 * 1024,
+    .max_record_size = DWNX_DEFAULT_MAX_RECORD_SIZE,
+    .max_datagram_frame_size = 1000,
+  };
   dwnx_conn *conn;
   uint8_t rawbuf[16384];
   dwnx_buf buf;
@@ -5691,12 +5701,27 @@ void test_dwnx_conn_writev_datagram(void) {
   /* DATAGRAM size exceeds the limit that the remote endpoint
      declares */
   setup_default_client(&conn);
+  dwnx_read_transport_params(conn, &small_remote_params, ++ts);
+
+  dwnx_buf_reset(&buf);
+  nwrite =
+    dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf), &accepted,
+                             DWNX_WRITE_DATAGRAM_FLAG_NONE, nulldata,
+                             1000 - /* type = */ 1 - /* length */ 2 + 1, ++ts);
+
+  assert_ptrdiff(DWNX_ERR_INVALID_ARGUMENT, ==, nwrite);
+
+  dwnx_conn_del(conn);
+
+  /* DATAGRAM size exceeds the limit of the outgoing record size */
+  setup_default_client(&conn);
   dwnx_read_transport_params(conn, &remote_params, ++ts);
 
   dwnx_buf_reset(&buf);
-  nwrite = dwnx_conn_write_datagram(conn, buf.last, dwnx_buf_left(&buf),
-                                    &accepted, DWNX_WRITE_DATAGRAM_FLAG_NONE,
-                                    nulldata, 65531, ++ts);
+  nwrite = dwnx_conn_write_datagram(
+    conn, buf.last, dwnx_buf_left(&buf), &accepted,
+    DWNX_WRITE_DATAGRAM_FLAG_NONE, nulldata,
+    DWNX_DEFAULT_MAX_RECORD_SIZE - /* type = */ 1 - /* length */ 2 + 1, ++ts);
 
   assert_ptrdiff(DWNX_ERR_INVALID_ARGUMENT, ==, nwrite);
 
