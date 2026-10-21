@@ -339,8 +339,8 @@ static int conn_new(dwnx_conn **pconn, const dwnx_callbacks *callbacks,
   assert(params->initial_max_stream_data_bidi_local <= DWNX_MAX_VARINT);
   assert(params->initial_max_stream_data_bidi_remote <= DWNX_MAX_VARINT);
   assert(params->initial_max_data <= DWNX_MAX_VARINT);
-  assert(params->initial_max_streams_bidi <= DWNX_MAX_VARINT);
-  assert(params->initial_max_streams_uni <= DWNX_MAX_VARINT);
+  assert(params->initial_max_streams_bidi <= DWNX_MAX_STREAMS);
+  assert(params->initial_max_streams_uni <= DWNX_MAX_STREAMS);
   assert(params->max_idle_timeout != UINT64_MAX);
   assert(params->max_idle_timeout / DWNX_MILLISECONDS <= DWNX_MAX_VARINT);
   assert(params->max_record_size <= DWNX_MAX_VARINT);
