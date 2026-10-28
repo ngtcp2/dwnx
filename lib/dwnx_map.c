@@ -29,6 +29,7 @@
 #include <stdio.h>
 
 #include "dwnx_conv.h"
+#include "dwnx_macro.h"
 
 #define DWNX_INITIAL_HASHBITS 4
 
@@ -73,18 +74,19 @@ int dwnx_map_each(const dwnx_map *map, int (*func)(void *data, void *ptr),
   return 0;
 }
 
-/* Hasher from
-   https://github.com/rust-lang/rustc-hash/blob/dc5c33f1283de2da64d8d7a06401d91aded03ad4/src/lib.rs
-   to maximize the output's sensitivity to all input bits. */
-#define DWNX_MAP_HASHER 0xF1357AEA2E62A9C5ULL
-/* 64-bit Fibonacci hashing constant, Golden Ratio constant, to get
-   the high bits with the good distribution. */
-#define DWNX_MAP_FIBO 0x9E3779B97F4A7C15ULL
+/* 64-bit finalizer (fmix64) from MurmurHash3 to maximize the output's
+   sensitivity to all input bits. */
+#define DWNX_MAP_HASHER1 0xFF51AFD7ED558CCDULL
+#define DWNX_MAP_HASHER2 0xC4CEB9FE1A85EC53ULL
 
 static size_t map_index(const dwnx_map *map, dwnx_map_key_type key) {
-  key += map->seed;
-  key *= DWNX_MAP_HASHER;
-  return (size_t)((key * DWNX_MAP_FIBO) >> (64 - map->hashbits));
+  key ^= map->seed;
+  key ^= key >> 33;
+  key *= DWNX_MAP_HASHER1;
+  key ^= key >> 33;
+  key *= DWNX_MAP_HASHER2;
+  key ^= key >> 33;
+  return (size_t)(key >> (64 - map->hashbits));
 }
 
 #ifndef WIN32
@@ -128,8 +130,8 @@ static void map_set_entry(dwnx_map *map, size_t idx, dwnx_map_key_type key,
   } while (0)
 
 /*
- * map_insert inserts |key| and |data| to |map|, and returns the index
- * where the pair is stored if it succeeds.  Otherwise, it returns one
+ * map_insert inserts |key| and |data| to |map|, and returns the
+ * largest psl ever found if it succeeds.  Otherwise, it returns one
  * of the following negative error codes:
  *
  * DWNX_ERR_INVALID_ARGUMENT
@@ -140,6 +142,7 @@ static dwnx_ssize map_insert(dwnx_map *map, dwnx_map_key_type key, void *data) {
   size_t mask = ((size_t)1 << map->hashbits) - 1;
   size_t psl = 1;
   size_t kpsl;
+  size_t max_psl = 0;
 
   for (;;) {
     kpsl = map->psl[idx];
@@ -148,10 +151,11 @@ static dwnx_ssize map_insert(dwnx_map *map, dwnx_map_key_type key, void *data) {
       map_set_entry(map, idx, key, data, psl);
       ++map->size;
 
-      return (dwnx_ssize)idx;
+      return (dwnx_ssize)dwnx_max(max_psl, psl);
     }
 
     if (psl > kpsl) {
+      max_psl = dwnx_max(max_psl, psl);
       DWNX_SWAP(dwnx_map_key_type, &key, &map->keys[idx]);
       DWNX_SWAP(void *, &data, &map->data[idx]);
       DWNX_SWAP(uint8_t, &psl, &map->psl[idx]);
@@ -176,14 +180,14 @@ static dwnx_ssize map_insert(dwnx_map *map, dwnx_map_key_type key, void *data) {
 static int map_resize(dwnx_map *map, size_t new_hashbits) {
   size_t i;
   size_t tablelen;
-  dwnx_ssize idx;
+  dwnx_ssize max_psl;
   dwnx_map new_map = {
     .mem = map->mem,
     .seed = map->seed,
     .hashbits = new_hashbits,
   };
   void *buf;
-  (void)idx;
+  (void)max_psl;
 
   if (new_hashbits > DWNX_MAP_MAX_HASHBITS) {
     return DWNX_ERR_NOMEM;
@@ -211,11 +215,11 @@ static int map_resize(dwnx_map *map, size_t new_hashbits) {
         continue;
       }
 
-      idx = map_insert(&new_map, map->keys[i], map->data[i]);
+      max_psl = map_insert(&new_map, map->keys[i], map->data[i]);
 
       /* map_insert must not fail because all keys are unique during
          resize. */
-      assert(idx >= 0);
+      assert(max_psl >= 0);
     }
   }
 
@@ -235,7 +239,7 @@ static int map_resize(dwnx_map *map, size_t new_hashbits) {
 int dwnx_map_insert(dwnx_map *map, dwnx_map_key_type key, void *data) {
   int rv;
   size_t tablelen;
-  dwnx_ssize idx;
+  dwnx_ssize max_psl;
 
   assert(data);
 
@@ -253,26 +257,31 @@ int dwnx_map_insert(dwnx_map *map, dwnx_map_key_type key, void *data) {
       return rv;
     }
 
-    idx = map_insert(map, key, data);
-    if (idx < 0) {
-      return (int)idx;
+    max_psl = map_insert(map, key, data);
+    if (max_psl < 0) {
+      return (int)max_psl;
     }
 
     return 0;
   }
 
-  idx = map_insert(map, key, data);
-  if (idx < 0) {
-    return (int)idx;
+  max_psl = map_insert(map, key, data);
+  if (max_psl < 0) {
+    return (int)max_psl;
   }
 
   /* Resize if psl reaches really large value which is almost
      improbable, but just in case. */
-  if (map->psl[idx] - 1 < DWNX_MAX_PSL_RESIZE_THRESH) {
+  if (max_psl - 1 < DWNX_MAX_PSL_RESIZE_THRESH) {
     return 0;
   }
 
-  return map_resize(map, map->hashbits + 1);
+  rv = map_resize(map, map->hashbits + 1);
+  if (rv != 0) {
+    dwnx_map_remove(map, key);
+  }
+
+  return rv;
 }
 
 void *dwnx_map_find(const dwnx_map *map, dwnx_map_key_type key) {
