@@ -65,7 +65,7 @@ int dwnx_balloc_get(dwnx_balloc *balloc, void **pbuf, size_t n) {
 
   if (dwnx_buf_left(&balloc->buf) < n) {
     p = dwnx_mem_malloc(balloc->mem,
-                        sizeof(dwnx_memblock_hd) + 0x8U + balloc->blklen);
+                        sizeof(dwnx_memblock_hd) + 0xFU + balloc->blklen);
     if (p == NULL) {
       return DWNX_ERR_NOMEM;
     }
